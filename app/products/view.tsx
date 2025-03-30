@@ -30,12 +30,15 @@ import {
 } from "lucide-react-native";
 import { getProductById, updateProduct } from "../../services/productService";
 import { supabase } from "../../lib/supabase";
+import { debugImageData } from "../../utils/imageUtils";
+import SafeImage from "../../components/SafeImage";
 
 import Header from "../../components/Header";
 import Notification from "../../components/Notification";
 
 interface Image {
-  base64: string;
+  base64?: string;
+  uri?: string;
 }
 
 export default function ProductViewScreen() {
@@ -88,10 +91,21 @@ export default function ProductViewScreen() {
         setCustomerPhone(productData.customer_phone || "");
       }
       
+      // Debug product image data
+      console.log('Primary image URL:', debugImageData(productData.primary_image_url));
+      if (productData.image_urls && Array.isArray(productData.image_urls)) {
+        console.log(`Product has ${productData.image_urls.length} additional images`);
+        productData.image_urls.forEach((url: string, index: number) => {
+          console.log(`Image ${index + 1}:`, debugImageData(url));
+        });
+      }
+      
       // Parse images from JSON string
       try {
-        if (productData.images) {
-          const parsedImages = JSON.parse(productData.images);
+        // Use type assertion to access potentially non-existent property
+        const anyProductData = productData as any;
+        if (anyProductData.images) {
+          const parsedImages = JSON.parse(anyProductData.images);
           if (Array.isArray(parsedImages) && parsedImages.length > 0) {
             // Ensure all images have valid base64 data
             const validImages = parsedImages.filter(img => img && img.base64);
@@ -99,6 +113,40 @@ export default function ProductViewScreen() {
           } else {
             setImages([]);
           }
+        } else if (productData.primary_image_url) {
+          // Handle modern image storage format with primary_image_url
+          const images: Image[] = [];
+          
+          // Check if it's a base64 data URL or a regular URL
+          if (productData.primary_image_url.startsWith('data:image')) {
+            const match = productData.primary_image_url.match(/base64,(.+)/);
+            if (match && match[1]) {
+              images.push({ base64: match[1] });
+            }
+          } else {
+            // It's a regular URL
+            images.push({ uri: productData.primary_image_url });
+          }
+          
+          // Add additional images if available (skipping the primary image)
+          if (productData.image_urls && Array.isArray(productData.image_urls)) {
+            // Skip first image if it matches the primary_image_url to avoid duplicates
+            const additionalImages = productData.image_urls.filter(url => url !== productData.primary_image_url);
+            
+            additionalImages.forEach((url: string) => {
+              if (url.startsWith('data:image')) {
+                const match = url.match(/base64,(.+)/);
+                if (match && match[1]) {
+                  images.push({ base64: match[1] });
+                }
+              } else {
+                // It's a regular URL
+                images.push({ uri: url });
+              }
+            });
+          }
+          
+          setImages(images);
         } else {
           setImages([]);
         }
@@ -453,11 +501,11 @@ export default function ProductViewScreen() {
           <View className="bg-white rounded-xl shadow-sm mb-5 overflow-hidden">
             {images.length > 0 ? (
               <View className="relative">
-            <RNImage
-                  source={{ uri: `data:image/jpeg;base64,${images[currentImageIndex]?.base64}` }}
-              className="w-full h-64"
-              resizeMode="cover"
-            />
+                <SafeImage
+                  source={images[currentImageIndex]?.base64 || images[currentImageIndex]?.uri}
+                  style={{ width: '100%', height: 256 }}
+                  resizeMode="cover"
+                />
                 
                 {images.length > 1 && (
                   <>

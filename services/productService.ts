@@ -13,8 +13,8 @@ export interface Product {
   status: 'Available' | 'Rented' | 'Sold' | 'Maintenance' | 'Unavailable';
   rental_price: number;
   selling_price: number;
-  images: string; // JSON string of base64 images
-  image_url?: string; // URL for the first/primary image
+  primary_image_url?: string; // Primary image URL (text)
+  image_urls?: any; // Array of image URLs (jsonb)
   specifications?: string; // JSON string of specs
   purchase_date?: string;
   purchase_price?: number;
@@ -29,6 +29,12 @@ export interface Product {
   rented_to_customer_id?: string;
   rental_start_date?: string;
   rental_end_date?: string;
+}
+
+// Legacy product data with images field for form compatibility
+interface LegacyProductData extends Partial<Product> {
+  images?: string; // JSON string of base64 images (not in DB schema)
+  image_url?: string; // Legacy field not in DB schema
 }
 
 // Get all products with custom sorting by status
@@ -98,9 +104,45 @@ export const getProductById = async (id: string): Promise<Product | null> => {
 };
 
 // Create a new product
-export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product | null> => {
+export const createProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at'> | LegacyProductData): Promise<Product | null> => {
   try {
     console.log('Creating product with name:', product.name);
+    
+    // Handle images data conversion if present
+    if ('images' in product && product.images) {
+      try {
+        // Parse the images JSON string to get base64 data
+        const parsedImages = JSON.parse(product.images);
+        if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+          // Set primary_image_url to the first image
+          product.primary_image_url = `data:image/jpeg;base64,${parsedImages[0].base64}`;
+          
+          // Create image_urls array if multiple images
+          if (parsedImages.length > 0) {
+            product.image_urls = parsedImages.map(img => 
+              `data:image/jpeg;base64,${img.base64}`
+            );
+          }
+        }
+        
+        // Remove the 'images' property since it doesn't exist in the database
+        delete product.images;
+      } catch (err) {
+        console.error('Error processing images data:', err);
+        delete product.images;
+      }
+    }
+    
+    // Handle legacy image_url field
+    if ('image_url' in product) {
+      // Move image_url value to primary_image_url
+      if (product.image_url) {
+        product.primary_image_url = product.image_url;
+      }
+      
+      // Remove non-existent column
+      delete product.image_url;
+    }
     
     // Set a timeout for the operation
     const timeoutPromise = new Promise((_, reject) => 
@@ -130,9 +172,47 @@ export const createProduct = async (product: Omit<Product, 'id' | 'created_at' |
 };
 
 // Update a single product
-export const updateProduct = async (id: string, data: Partial<Product>) => {
+export const updateProduct = async (id: string, data: Partial<Product> | LegacyProductData) => {
   try {
     console.log(`Updating product ${id} with data:`, data);
+    
+    // Handle images data conversion if present
+    if ('images' in data && data.images) {
+      // If the legacy 'images' field is used (not in database), 
+      // convert to primary_image_url to maintain compatibility
+      try {
+        // Parse the images JSON string to get base64 data
+        const parsedImages = JSON.parse(data.images);
+        if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+          // Set primary_image_url to the first image
+          data.primary_image_url = `data:image/jpeg;base64,${parsedImages[0].base64}`;
+          
+          // Create image_urls array if multiple images
+          if (parsedImages.length > 0) {
+            data.image_urls = parsedImages.map(img => 
+              `data:image/jpeg;base64,${img.base64}`
+            );
+          }
+        }
+        
+        // Remove the 'images' property since it doesn't exist in the database
+        delete data.images;
+      } catch (err) {
+        console.error('Error processing images data:', err);
+        delete data.images;
+      }
+    }
+    
+    // Handle legacy image_url field
+    if ('image_url' in data) {
+      // Move image_url value to primary_image_url
+      if (data.image_url) {
+        data.primary_image_url = data.image_url;
+      }
+      
+      // Remove non-existent column
+      delete data.image_url;
+    }
     
     // If rented_to_customer_id or rental dates are included, make sure status is updated to 'Rented'
     if (data.rented_to_customer_id || data.rental_start_date || data.rental_end_date) {
@@ -178,9 +258,23 @@ export const updateProduct = async (id: string, data: Partial<Product>) => {
 };
 
 // Replaces deleteProduct - marks a product as unavailable instead of deleting it
-export const markProductUnavailable = async (id: string): Promise<boolean> => {
+export const markProductUnavailable = async (id: string, shouldDeleteImages: boolean = false): Promise<boolean> => {
   try {
     console.log(`Marking product ${id} as unavailable`);
+    
+    // If requested, clean up the product's images from storage
+    if (shouldDeleteImages) {
+      try {
+        // Import here to avoid circular dependencies
+        const productImageService = require('./productImageService');
+        await productImageService.deleteProductImages(id);
+        console.log(`Successfully deleted images for product ${id}`);
+      } catch (imageError) {
+        console.error(`Error deleting images for product ${id}:`, imageError);
+        // Continue even if image deletion fails
+      }
+    }
+    
     const { error } = await supabase
       .from(TABLE_NAME)
       .update({
@@ -218,6 +312,16 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
     if (orderItems && orderItems.length > 0) {
       console.error(`Cannot delete product ${id}: It's referenced in orders`);
       throw new Error('Cannot delete this product because it is associated with one or more orders. Consider marking it as unavailable instead.');
+    }
+    
+    // Before deleting the product, clean up its images from storage
+    try {
+      // Use dynamic import to avoid circular dependencies
+      const { deleteProductImages } = await import('./productImageService');
+      await deleteProductImages(id);
+    } catch (imageError) {
+      console.error(`Error deleting images for product ${id}:`, imageError);
+      // Continue with product deletion even if image deletion fails
     }
     
     // If no references, proceed with deletion

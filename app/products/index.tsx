@@ -33,6 +33,8 @@ import BottomNavigation from "../../components/navigation/BottomNavigation";
 import { getProducts, deleteProduct, markProductUnavailable, Product } from "../../services/productService";
 import Notification from "../../components/Notification";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import { initializeStorage } from "../../lib/initStorage";
+import SafeImage from "../../components/SafeImage";
 
 // Define the product item type for the UI
 interface ProductItem {
@@ -53,6 +55,9 @@ const STATUS_COLORS = {
   Unavailable: 'bg-gray-100 text-gray-800'
 };
 
+// Simple gray placeholder image (1x1 pixel) encoded as base64
+const DEFAULT_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
 export default function ProductsScreen() {
   const insets = useSafeAreaInsets();
   const [products, setProducts] = useState<ProductItem[]>([]);
@@ -66,10 +71,27 @@ export default function ProductsScreen() {
   const [successMessage, setSuccessMessage] = useState<string>("");
   const [showSuccess, setShowSuccess] = useState(false);
   const [showUnavailable, setShowUnavailable] = useState(false);
+  const [storageInitialized, setStorageInitialized] = useState(false);
+
+  // Initialize storage when the component mounts
+  useEffect(() => {
+    const initStorage = async () => {
+      try {
+        await initializeStorage();
+        setStorageInitialized(true);
+      } catch (err) {
+        console.error('Error initializing storage:', err);
+      }
+    };
+    
+    initStorage();
+  }, []);
 
   useEffect(() => {
-    fetchProducts();
-  }, [showUnavailable]);
+    if (storageInitialized) {
+      fetchProducts();
+    }
+  }, [showUnavailable, storageInitialized]);
 
   // Fetch products from API
   const fetchProducts = async () => {
@@ -77,7 +99,27 @@ export default function ProductsScreen() {
       setLoading(true);
       const data = await getProducts(showUnavailable);
       const formattedProducts = data.map(product => {
-        const imageUrl = product.image_url || 'https://via.placeholder.com/150';
+        // Get primary image from either new or old storage format
+        let imageUrl;
+        
+        if (product.image_urls && Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+          // New storage format - use first image from image_urls array
+          imageUrl = product.image_urls[0];
+        } else if (product.primary_image_url) {
+          // New storage format - fallback to primary_image_url
+          imageUrl = product.primary_image_url;
+        } else {
+          // Cast to any to avoid TypeScript errors for legacy field
+          const anyProduct = product as any;
+          if (anyProduct.image_url) {
+            // Old storage format - use image_url
+            imageUrl = anyProduct.image_url;
+          } else {
+            // Default image
+            imageUrl = DEFAULT_IMAGE;
+          }
+        }
+
         return {
           id: product.id,
           name: product.name,
@@ -107,7 +149,7 @@ export default function ProductsScreen() {
     
     try {
       setIsDeleting(true);
-      const success = await markProductUnavailable(productToDelete.id);
+      const success = await markProductUnavailable(productToDelete.id, true);
       
       if (success) {
         setDeleteDialogVisible(false);
@@ -136,9 +178,13 @@ export default function ProductsScreen() {
         onPress={() => router.push(`/products/view?id=${item.id}`)}
       >
         <View className="flex-row justify-between">
-          <Image
-            source={{ uri: item.image }}
-            className="w-20 h-20 rounded-lg mr-3"
+          <SafeImage
+            source={item.image}
+            style={{ width: 80, height: 80, borderRadius: 8 }}
+            containerStyle={{ marginRight: 12 }}
+            placeholderSize={20}
+            placeholderText="No image"
+            showPlaceholder={true}
           />
           <View className="flex-1">
             <View className="flex-row justify-between items-start">

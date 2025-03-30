@@ -364,21 +364,6 @@ export default function FinancesScreen() {
                     </Text>
                   </View>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="bg-white p-4 rounded-lg shadow-sm flex-row items-center w-full"
-                  onPress={() => router.push("/finances/reports/tax" as any)}
-                >
-                  <View className="w-10 h-10 rounded-full bg-purple-100 items-center justify-center mr-3">
-                    <DollarSign size={20} color="#8B5CF6" />
-                  </View>
-                  <View>
-                    <Text className="font-medium text-gray-900">Tax Summary</Text>
-                    <Text className="text-gray-500 text-sm">
-                      Prepare for tax filing
-                    </Text>
-                  </View>
-                </TouchableOpacity>
               </View>
             </View>
           )}

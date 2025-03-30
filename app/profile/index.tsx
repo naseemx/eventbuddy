@@ -6,18 +6,22 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
-  User,
+  Building,
   Mail,
   Phone,
   MapPin,
-  Calendar,
+  Globe,
   Edit,
-  Settings,
-  LogOut,
+  Instagram,
+  Facebook,
+  Youtube,
+  Twitter,
+  MessageCircle,
 } from "lucide-react-native";
 
 import Header from "../../components/Header";
@@ -25,49 +29,61 @@ import Header from "../../components/Header";
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
-  // Mock user data
-  const user = {
+  // Mock company data
+  const company = {
     id: "1",
-    name: "Alex Johnson",
-    email: "alex.johnson@example.com",
-    phone: "(555) 123-4567",
-    address: "123 Main St, Anytown, USA",
-    role: "Admin",
-    joinDate: "Jan 15, 2022",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
+    name: "TechFlow Solutions",
+    email: "info@techflow.com",
+    phone: "(555) 987-6543",
+    whatsapp: "(555) 123-4567",
+    address: "456 Business Plaza, Enterprise City, USA",
+    website: "www.techflow.com",
+    logo: "https://api.dicebear.com/7.x/initials/svg?seed=TF",
+    taxId: "TAX-12345678",
+    foundedYear: "2015",
+    socialMedia: {
+      instagram: "techflow_official",
+      facebook: "TechFlowSolutions",
+      youtube: "TechFlowOfficial",
+      twitter: "TechFlow"
+    }
   };
 
-  const handleEditProfile = () => {
+  const handleEditCompany = () => {
     router.push("/profile/edit");
   };
 
-  const handleLogout = () => {
-    router.push("/login");
+  const openLink = (url: string) => {
+    Linking.openURL(url);
+  };
+
+  const openWhatsApp = (number: string) => {
+    Linking.openURL(`whatsapp://send?phone=${number.replace(/[^0-9]/g, '')}`);
   };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
-      <Header title="My Profile" />
+      <Header title="Company Profile" />
 
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom }}
       >
-        {/* Profile Header */}
+        {/* Company Header */}
         <View className="bg-white p-5 rounded-xl shadow-sm mb-5 items-center">
           <Image
-            source={{ uri: user.avatar }}
+            source={{ uri: company.logo }}
             className="w-24 h-24 rounded-full mb-4"
           />
-          <Text className="text-2xl font-bold text-gray-900">{user.name}</Text>
-          <Text className="text-gray-600 mb-2">{user.role}</Text>
+          <Text className="text-2xl font-bold text-gray-900">{company.name}</Text>
+          <Text className="text-gray-600 mb-2">Since {company.foundedYear}</Text>
           <TouchableOpacity
             className="bg-blue-500 px-4 py-2 rounded-lg flex-row items-center mt-2"
-            onPress={handleEditProfile}
+            onPress={handleEditCompany}
           >
             <Edit size={16} color="#FFFFFF" />
-            <Text className="text-white font-medium ml-2">Edit Profile</Text>
+            <Text className="text-white font-medium ml-2">Edit Company</Text>
           </TouchableOpacity>
         </View>
 
@@ -81,7 +97,7 @@ export default function ProfileScreen() {
             <Mail size={20} color="#4B5563" className="mr-3" />
             <View>
               <Text className="text-gray-500 text-sm">Email</Text>
-              <Text className="text-gray-800 font-medium">{user.email}</Text>
+              <Text className="text-gray-800 font-medium">{company.email}</Text>
             </View>
           </View>
 
@@ -89,7 +105,17 @@ export default function ProfileScreen() {
             <Phone size={20} color="#4B5563" className="mr-3" />
             <View>
               <Text className="text-gray-500 text-sm">Phone</Text>
-              <Text className="text-gray-800 font-medium">{user.phone}</Text>
+              <Text className="text-gray-800 font-medium">{company.phone}</Text>
+            </View>
+          </View>
+
+          <View className="flex-row items-center mb-3">
+            <MessageCircle size={20} color="#25D366" className="mr-3" />
+            <View>
+              <Text className="text-gray-500 text-sm">WhatsApp</Text>
+              <TouchableOpacity onPress={() => openWhatsApp(company.whatsapp)}>
+                <Text className="text-green-600 font-medium">{company.whatsapp}</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -97,48 +123,74 @@ export default function ProfileScreen() {
             <MapPin size={20} color="#4B5563" className="mr-3" />
             <View>
               <Text className="text-gray-500 text-sm">Address</Text>
-              <Text className="text-gray-800 font-medium">{user.address}</Text>
+              <Text className="text-gray-800 font-medium">{company.address}</Text>
+            </View>
+          </View>
+
+          <View className="flex-row items-center mb-3">
+            <Globe size={20} color="#4B5563" className="mr-3" />
+            <View>
+              <Text className="text-gray-500 text-sm">Website</Text>
+              <TouchableOpacity onPress={() => openLink(`https://${company.website}`)}>
+                <Text className="text-blue-600 font-medium">{company.website}</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
           <View className="flex-row items-center">
-            <Calendar size={20} color="#4B5563" className="mr-3" />
+            <Building size={20} color="#4B5563" className="mr-3" />
             <View>
-              <Text className="text-gray-500 text-sm">Joined</Text>
-              <Text className="text-gray-800 font-medium">{user.joinDate}</Text>
+              <Text className="text-gray-500 text-sm">Tax ID</Text>
+              <Text className="text-gray-800 font-medium">{company.taxId}</Text>
             </View>
           </View>
         </View>
 
-        {/* Quick Actions */}
+        {/* Social Media */}
         <View className="bg-white p-5 rounded-xl shadow-sm mb-5">
           <Text className="text-lg font-bold mb-4 text-gray-900">
-            Quick Actions
+            Social Media
           </Text>
 
-          <TouchableOpacity
-            className="flex-row items-center py-3 border-b border-gray-100"
-            onPress={() => router.push("/settings")}
-          >
-            <Settings size={20} color="#4B5563" className="mr-3" />
-            <Text className="text-gray-800 font-medium">Settings</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center mb-3">
+            <Instagram size={20} color="#E1306C" className="mr-3" />
+            <View>
+              <Text className="text-gray-500 text-sm">Instagram</Text>
+              <TouchableOpacity onPress={() => openLink(`https://instagram.com/${company.socialMedia.instagram}`)}>
+                <Text className="text-pink-600 font-medium">@{company.socialMedia.instagram}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <TouchableOpacity
-            className="flex-row items-center py-3 border-b border-gray-100"
-            onPress={() => router.push("/logs")}
-          >
-            <Settings size={20} color="#4B5563" className="mr-3" />
-            <Text className="text-gray-800 font-medium">Activity Logs</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center mb-3">
+            <Facebook size={20} color="#1877F2" className="mr-3" />
+            <View>
+              <Text className="text-gray-500 text-sm">Facebook</Text>
+              <TouchableOpacity onPress={() => openLink(`https://facebook.com/${company.socialMedia.facebook}`)}>
+                <Text className="text-blue-600 font-medium">@{company.socialMedia.facebook}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-          <TouchableOpacity
-            className="flex-row items-center py-3"
-            onPress={handleLogout}
-          >
-            <LogOut size={20} color="#EF4444" className="mr-3" />
-            <Text className="text-red-500 font-medium">Logout</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center mb-3">
+            <Youtube size={20} color="#FF0000" className="mr-3" />
+            <View>
+              <Text className="text-gray-500 text-sm">YouTube</Text>
+              <TouchableOpacity onPress={() => openLink(`https://youtube.com/@${company.socialMedia.youtube}`)}>
+                <Text className="text-red-600 font-medium">@{company.socialMedia.youtube}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View className="flex-row items-center">
+            <Twitter size={20} color="#1DA1F2" className="mr-3" />
+            <View>
+              <Text className="text-gray-500 text-sm">Twitter</Text>
+              <TouchableOpacity onPress={() => openLink(`https://twitter.com/${company.socialMedia.twitter}`)}>
+                <Text className="text-blue-400 font-medium">@{company.socialMedia.twitter}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

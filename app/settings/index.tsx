@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -9,15 +9,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  User,
-  Bell,
-  Shield,
   Building,
+  Bell,
   Database,
   HelpCircle,
   LogOut,
   ChevronRight,
+  Info,
 } from "lucide-react-native";
+import { router } from "expo-router";
+import Constants from "expo-constants";
+import * as Notifications from 'expo-notifications';
 
 import Header from "../../components/Header";
 import BottomNavigation from "../../components/navigation/BottomNavigation";
@@ -67,6 +69,38 @@ const SettingsItem = ({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  
+  // Get app version from expo constants
+  const appVersion = Constants.expoConfig?.version || "1.0.0";
+  const runtimeVersion = Constants.expoConfig?.runtimeVersion || "1.0.0";
+
+  // Check notifications permission status
+  useEffect(() => {
+    checkNotificationPermission();
+  }, []);
+
+  const checkNotificationPermission = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    setNotificationsEnabled(status === 'granted');
+  };
+
+  // Toggle notifications
+  const toggleNotifications = async (value: boolean) => {
+    if (value) {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        // Permission was denied
+        setNotificationsEnabled(false);
+        return;
+      }
+      setNotificationsEnabled(true);
+    } else {
+      // On Android, we can't programmatically revoke permissions
+      // Just update the UI state and inform user to disable in system settings
+      setNotificationsEnabled(false);
+      // You could show an alert here instructing the user to disable in settings
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
@@ -83,22 +117,25 @@ export default function SettingsScreen() {
         {/* User Profile Section */}
         <View className="bg-white p-4 rounded-lg mb-6 items-center">
           <View className="w-20 h-20 rounded-full bg-blue-500 mb-3 items-center justify-center">
-            <Text className="text-white text-2xl font-bold">JD</Text>
+            <Text className="text-white text-2xl font-bold">TF</Text>
           </View>
-          <Text className="text-xl font-bold">John Doe</Text>
-          <Text className="text-gray-500">Admin</Text>
-          <TouchableOpacity className="mt-3 bg-blue-50 px-4 py-2 rounded-full">
-            <Text className="text-blue-600 font-medium">Edit Profile</Text>
+          <Text className="text-xl font-bold">TechFlow Solutions</Text>
+          <Text className="text-gray-500">Company Profile</Text>
+          <TouchableOpacity 
+            className="mt-3 bg-blue-50 px-4 py-2 rounded-full"
+            onPress={() => router.push("/profile/edit")}
+          >
+            <Text className="text-blue-600 font-medium">Edit Company</Text>
           </TouchableOpacity>
         </View>
 
         {/* Account Settings */}
         <SettingsSection title="ACCOUNT SETTINGS">
           <SettingsItem
-            icon={<User size={20} color="#4B5563" />}
-            title="Personal Information"
-            subtitle="Update your personal details"
-            onPress={() => router.push("/settings/personal-information")}
+            icon={<Building size={20} color="#4B5563" />}
+            title="Company Information"
+            subtitle="Update your company details"
+            onPress={() => router.push("/settings/company-information")}
           />
           <SettingsItem
             icon={<Bell size={20} color="#4B5563" />}
@@ -107,35 +144,17 @@ export default function SettingsScreen() {
             rightElement={
               <Switch
                 value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
+                onValueChange={toggleNotifications}
                 trackColor={{ false: "#D1D5DB", true: "#BFDBFE" }}
                 thumbColor={notificationsEnabled ? "#3B82F6" : "#9CA3AF"}
               />
             }
-          />
-          <SettingsItem
-            icon={<Shield size={20} color="#4B5563" />}
-            title="Security"
-            subtitle="Change password and security settings"
-            onPress={() => router.push("/settings/security")}
             isLast
           />
         </SettingsSection>
 
-        {/* Business Settings */}
-        <SettingsSection title="BUSINESS SETTINGS">
-          <SettingsItem
-            icon={<Building size={20} color="#4B5563" />}
-            title="Company Information"
-            subtitle="Update your business details"
-            onPress={() => router.push("/settings/company-information")}
-          />
-          <SettingsItem
-            icon={<User size={20} color="#4B5563" />}
-            title="Employee Management"
-            subtitle="Manage staff and permissions"
-            onPress={() => router.push("/settings/employee-management")}
-          />
+        {/* Data Backup and Storage Settings */}
+        <SettingsSection title="DATA BACKUP AND STORAGE SETTINGS">
           <SettingsItem
             icon={<Database size={20} color="#4B5563" />}
             title="Data Backup"
@@ -152,6 +171,17 @@ export default function SettingsScreen() {
             title="Help & Support"
             subtitle="Get help with using the app"
             onPress={() => router.push("/settings/help-support")}
+            isLast
+          />
+        </SettingsSection>
+
+        {/* App Information */}
+        <SettingsSection title="APP INFORMATION">
+          <SettingsItem
+            icon={<Info size={20} color="#4B5563" />}
+            title="App Version"
+            subtitle={`${appVersion} (Runtime ${runtimeVersion})`}
+            rightElement={<View />}
             isLast
           />
         </SettingsSection>

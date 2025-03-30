@@ -18,12 +18,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import { ArrowLeft, Save, Camera, Plus, X, ImageIcon, Calendar, ChevronLeft, ChevronRight, DollarSign } from "lucide-react-native";
 import * as ExpoImagePicker from 'expo-image-picker';
-import { createProduct, getProductById, updateProduct } from "../../services/productService";
+import { createProduct, getProductById, updateProduct, Product } from "../../services/productService";
 import { processImagesForStorage } from "../../utils/imageUtils";
+import { updateProductImages } from '../../services/productImageService';
 
 import Header from "../../components/Header";
 import Notification from "../../components/Notification";
 import DatePickerModal from "../../components/DatePickerModal";
+import SafeImage from "../../components/SafeImage";
 
 // Generate array of month names
 const MONTHS = [
@@ -129,9 +131,10 @@ export default function ProductAddScreen() {
         }
         
         // Populate images
-        if (productData.images) {
+        const anyProductData = productData as any; // Use type assertion to bypass TypeScript checks
+        if (anyProductData.images) {
           try {
-            const parsedImages = JSON.parse(productData.images);
+            const parsedImages = JSON.parse(anyProductData.images);
             if (Array.isArray(parsedImages)) {
               // Convert base64 strings to image objects
               const imageObjects = parsedImages.map((img: any) => ({
@@ -142,6 +145,39 @@ export default function ProductAddScreen() {
             }
           } catch (error) {
             console.error("Error parsing images:", error);
+          }
+        } else if (productData.primary_image_url) {
+          // If we have primary_image_url but no legacy images data, create an image object
+          // Extract base64 content if it's a data URL
+          let base64Content = '';
+          if (productData.primary_image_url.startsWith('data:image')) {
+            const base64Match = productData.primary_image_url.match(/base64,(.+)/);
+            if (base64Match && base64Match[1]) {
+              base64Content = base64Match[1];
+            }
+          }
+          
+          // Create image object
+          const imageObject: ImageData = {
+            uri: productData.primary_image_url,
+            base64: base64Content || undefined
+          };
+          
+          // Add to images array
+          setImages([imageObject]);
+          
+          // Add additional images if available
+          if (productData.image_urls && Array.isArray(productData.image_urls)) {
+            const additionalImages = productData.image_urls.slice(1).map((url: string) => {
+              let base64 = '';
+              if (url.startsWith('data:image')) {
+                const match = url.match(/base64,(.+)/);
+                base64 = match && match[1] ? match[1] : '';
+              }
+              return { uri: url, base64: base64 || undefined };
+            });
+            
+            setImages(prev => [...prev, ...additionalImages]);
           }
         }
         
@@ -179,45 +215,122 @@ export default function ProductAddScreen() {
   };
 
   const handleImagePicker = async () => {
-    if (images.length >= 3) {
-      setNotificationMessage("You can upload a maximum of 3 images per product.");
-      setShowErrorNotification(true);
-      return;
-    }
-
-    // Request permission
-    const { status } = await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
+    const maxImages = 3;
     
-    if (status !== 'granted') {
-      setNotificationMessage("Sorry, we need camera roll permissions to make this work!");
-      setShowErrorNotification(true);
+    if (images.length >= maxImages) {
+      alert(`You can only upload a maximum of ${maxImages} images.`);
       return;
     }
 
     try {
+      const imagePerm = await ExpoImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!imagePerm.granted) {
+        alert("You need to enable permission to access the photo library");
+      return;
+    }
+
+    try {
+        // Determine if we should allow multiple selection
+        // When we can only pick one more image, disable multiple selection
+        const canSelectMultiple = images.length < maxImages - 1;
+        
       const result = await ExpoImagePicker.launchImageLibraryAsync({
         mediaTypes: ExpoImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.5, // Reduced quality for smaller file size
-        base64: true,
+          allowsEditing: !canSelectMultiple, // Only enable editing when selecting a single image
+          allowsMultipleSelection: canSelectMultiple, // Never use both allowsEditing and allowsMultipleSelection together
+          selectionLimit: maxImages - images.length,
+          quality: 1.0, // Use full quality for base64 to ensure data is captured
+          base64: true, // Request base64 data
+          exif: false,  // Don't need EXIF data
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedImage = result.assets[0];
-        if (selectedImage.uri) {
-          // Explicitly type the new image with our interface
-          const newImage: ImageData = {
-            uri: selectedImage.uri,
-            base64: selectedImage.base64 || undefined
-          };
-          setImages([...images, newImage]);
+          // Process images one by one to better handle errors
+          const newImages: ImageData[] = [];
+          let hasLargeImages = false;
+          let hasIssues = false;
+          
+          for (let i = 0; i < result.assets.length; i++) {
+            const img = result.assets[i];
+            
+            // Skip invalid images
+            if (!img.uri) {
+              console.warn("Image missing URI, skipping");
+              hasIssues = true;
+              continue;
+            }
+            
+            // Check for large images
+            if (img.fileSize && img.fileSize > 2 * 1024 * 1024) { 
+              hasLargeImages = true;
+            }
+            
+            // Verify base64 data exists
+            if (!img.base64 || img.base64.trim().length === 0) {
+              console.warn(`Image ${i} is missing base64 data. Attempting to load directly.`);
+              
+              try {
+                // For web or if the base64 isn't provided, try to get it another way
+                // We'll use the URI directly and let the upload function handle it
+                newImages.push({
+                  uri: img.uri,
+                  base64: undefined // Will rely on URI instead
+                });
+                continue;
+              } catch (error) {
+                console.error(`Failed to process image ${i}:`, error);
+                hasIssues = true;
+                continue;
+              }
+            }
+            
+            // If we have valid base64 data, add the image
+            newImages.push({
+              uri: img.uri,
+              base64: img.base64
+            });
+          }
+          
+          if (newImages.length === 0) {
+            Alert.alert(
+              "Image Processing Failed",
+              "Could not process any of the selected images. Please try again with different images.",
+              [{ text: "OK" }]
+            );
+            return;
+          }
+          
+          if (hasIssues) {
+            Alert.alert(
+              "Some Images Not Loaded",
+              "Some of the selected images could not be processed. Only valid images were added.",
+              [{ text: "OK" }]
+            );
+          }
+          
+          if (hasLargeImages) {
+            Alert.alert(
+              "Large Images Detected",
+              "Some images are larger than 2MB. These will be automatically compressed but may lose quality. For best results, use smaller images.",
+              [{ text: "OK" }]
+            );
+          }
+          
+          console.log(`Successfully processed ${newImages.length} images, current total will be: ${images.length + newImages.length}`);
+          // Log the first image to debug
+          if (newImages.length > 0) {
+            console.log(`First image base64 length: ${newImages[0].base64 ? newImages[0].base64.length : 'undefined'}`);
+          }
+          
+          setImages([...images, ...newImages]);
         }
+      } catch (error) {
+        console.error("Error picking image:", error);
+        alert("There was an error selecting the image.");
       }
     } catch (error) {
-      console.error("Error picking image:", error);
-      setNotificationMessage("Failed to pick image. Please try again.");
-      setShowErrorNotification(true);
+      console.error("Error with permissions:", error);
+      alert("There was an error with permissions.");
     }
   };
 
@@ -282,8 +395,18 @@ export default function ProductAddScreen() {
     try {
       setIsSubmitting(true);
       
-      // Process images for storage
+      // Process images for storage but don't set them directly in the database
       const processedImages = await processImagesForStorage(images);
+      
+      // Create a temporary ID for new products to organize images in storage
+      const tempId = isEditing ? id : `temp-${Date.now()}`;
+      
+      // Upload images to Supabase storage, deleting old ones if editing
+      const imageUrls = await updateProductImages(
+        tempId as string, 
+        processedImages.map(img => img.base64 ? `data:image/jpeg;base64,${img.base64}` : ''),
+        isEditing // Only clean up old images when editing
+      );
       
       const productData = {
         name: formData.name,
@@ -296,7 +419,12 @@ export default function ProductAddScreen() {
         purchase_date: formData.purchaseDate,
         purchase_price: parseFloat(formData.purchasePrice) || 0,
         specifications: JSON.stringify(specifications),
-        images: JSON.stringify(processedImages)
+        
+        // Store the primary image URL (first one) in primary_image_url
+        primary_image_url: imageUrls.length > 0 ? imageUrls[0] : undefined,
+        
+        // Store all image URLs in the image_urls array
+        image_urls: imageUrls.length > 0 ? imageUrls : []
       };
 
       let result;
@@ -390,9 +518,9 @@ export default function ProductAddScreen() {
             <View className="flex-row flex-wrap">
               {images.map((image, index) => (
                 <View key={index} className="w-1/3 p-1 relative">
-                <Image
-                    source={{ uri: image.uri }}
-                    className="w-full h-24 rounded-lg"
+                  <SafeImage
+                    source={image.uri}
+                    style={{ width: '100%', height: 96, borderRadius: 8 }}
                   resizeMode="cover"
                 />
                 <TouchableOpacity
