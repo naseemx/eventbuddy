@@ -35,6 +35,7 @@ import Notification from "../../components/Notification";
 import ConfirmDialog from "../../components/ConfirmDialog";
 import { initializeStorage } from "../../lib/initStorage";
 import SafeImage from "../../components/SafeImage";
+import OptimizedImage from "../../components/OptimizedImage";
 
 // Define the product item type for the UI
 interface ProductItem {
@@ -44,7 +45,7 @@ interface ProductItem {
   status: 'Available' | 'Rented' | 'Sold' | 'Maintenance' | 'Unavailable';
   rentalPrice: number;
   sellingPrice: number;
-  image: string;
+  image: string | null;
 }
 
 const STATUS_COLORS = {
@@ -100,24 +101,67 @@ export default function ProductsScreen() {
       const data = await getProducts(showUnavailable);
       const formattedProducts = data.map(product => {
         // Get primary image from either new or old storage format
-        let imageUrl;
+        let imageUrl = null;
         
-        if (product.image_urls && Array.isArray(product.image_urls) && product.image_urls.length > 0) {
-          // New storage format - use first image from image_urls array
-          imageUrl = product.image_urls[0];
-        } else if (product.primary_image_url) {
-          // New storage format - fallback to primary_image_url
+        // Debug: Log the image data to see what's available
+        console.log(`Product ${product.name} image data:`, { 
+          has_image_urls: !!product.image_urls, 
+          image_urls_length: product.image_urls ? (Array.isArray(product.image_urls) ? product.image_urls.length : 'not an array') : 0,
+          image_urls_type: product.image_urls ? typeof product.image_urls : null,
+          primary_image_url: product.primary_image_url,
+          first_url: product.image_urls && Array.isArray(product.image_urls) && product.image_urls.length > 0 
+            ? (typeof product.image_urls[0] === 'string' ? product.image_urls[0] : String(product.image_urls[0])) 
+            : null
+        });
+        
+        // Try to get image URL from image_urls array
+        if (product.image_urls) {
+          if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+            // It's a proper array
+            imageUrl = typeof product.image_urls[0] === 'string' 
+              ? product.image_urls[0]
+              : String(product.image_urls[0]);
+            console.log(`Using image_urls[0] for ${product.name}:`, imageUrl);
+          } else if (typeof product.image_urls === 'string') {
+            // Sometimes image_urls might be a string instead of an array
+            imageUrl = product.image_urls;
+            console.log(`Using image_urls as string for ${product.name}:`, imageUrl);
+          } else if (product.image_urls && typeof product.image_urls === 'object') {
+            // Handle case where image_urls is an empty object but we have primary_image_url
+            if (product.primary_image_url) {
+              imageUrl = product.primary_image_url;
+              console.log(`Object image_urls found for ${product.name}, using primary_image_url:`, imageUrl);
+            } else {
+              console.log(`Empty object image_urls format for ${product.name} with no primary_image_url`);
+            }
+          } else {
+            // image_urls exists but in unknown format
+            console.log(`Unknown image_urls format for ${product.name}:`, typeof product.image_urls);
+          }
+        } 
+        // Fallback to primary_image_url
+        else if (product.primary_image_url) {
           imageUrl = product.primary_image_url;
-        } else {
+          console.log(`Using primary_image_url for ${product.name}:`, imageUrl);
+        } 
+        // Try legacy format
+        else {
           // Cast to any to avoid TypeScript errors for legacy field
           const anyProduct = product as any;
           if (anyProduct.image_url) {
             // Old storage format - use image_url
             imageUrl = anyProduct.image_url;
-          } else {
-            // Default image
-            imageUrl = DEFAULT_IMAGE;
+            console.log(`Using legacy image_url for ${product.name}:`, imageUrl);
           }
+        }
+
+        // Make sure we have a valid string URL - handle empty strings and non-string values
+        if (!imageUrl) {
+          console.log(`No image URL for product ${product.id} - ${product.name}`);
+          imageUrl = null;
+        } else if (typeof imageUrl !== 'string') {
+          console.log(`Image URL is not a string for ${product.id} - ${product.name}:`, typeof imageUrl);
+          imageUrl = String(imageUrl);
         }
 
         return {
@@ -176,25 +220,28 @@ export default function ProductsScreen() {
       <TouchableOpacity
         className="bg-white p-4 rounded-lg mb-3 shadow-sm border border-gray-100"
         onPress={() => router.push(`/products/view?id=${item.id}`)}
+        hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
       >
         <View className="flex-row justify-between">
-          <SafeImage
+          <OptimizedImage
             source={item.image}
             style={{ width: 80, height: 80, borderRadius: 8 }}
             containerStyle={{ marginRight: 12 }}
             placeholderSize={20}
             placeholderText="No image"
             showPlaceholder={true}
+            thumbnail={true}
+            priority="low"
           />
           <View className="flex-1">
             <View className="flex-row justify-between items-start">
-              <View className="flex-1">
-                <Text className="text-lg font-semibold text-gray-900">
+              <View className="flex-1 mr-2">
+                <Text className="text-lg font-semibold text-gray-900" numberOfLines={1} ellipsizeMode="tail">
                   {item.name}
                 </Text>
                 <View className="flex-row items-center mt-1">
                   <Package size={14} color="#6B7280" />
-                  <Text className="text-gray-500 text-sm ml-1">
+                  <Text className="text-gray-500 text-sm ml-1" numberOfLines={1} ellipsizeMode="tail">
                     {item.category}
                   </Text>
                 </View>

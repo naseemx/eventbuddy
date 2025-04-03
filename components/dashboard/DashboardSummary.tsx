@@ -25,19 +25,19 @@ const SummaryCard = ({
   trendUp = true,
 }: SummaryCardProps) => {
   return (
-    <View className="bg-white rounded-xl p-4 shadow-sm mr-3 w-36">
+    <View className="bg-white rounded-xl p-4 shadow-sm mr-3 w-[160px]">
       <View className="flex-row justify-between items-center mb-2">
-        <Text className="text-gray-500 text-xs font-medium">{title}</Text>
+        <Text className="text-gray-500 text-xs font-medium flex-1" numberOfLines={1} ellipsizeMode="tail">{title}</Text>
         <View className="bg-indigo-100 p-1.5 rounded-full">{icon}</View>
       </View>
-      <Text className="text-xl font-bold mb-1">{value}</Text>
+      <Text className="text-xl font-bold mb-1" numberOfLines={1} ellipsizeMode="tail">{value}</Text>
       <View className="flex-row items-center">
         <Text
           className={`text-xs font-medium ${trendUp ? "text-green-600" : "text-red-600"}`}
         >
           {trend}
         </Text>
-        <Text className="text-xs text-gray-500 ml-1">vs last month</Text>
+        <Text className="text-xs text-gray-500 ml-1" numberOfLines={1} ellipsizeMode="tail">vs last month</Text>
       </View>
     </View>
   );
@@ -175,6 +175,7 @@ const DashboardSummary = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         className="-mx-1 px-3.5"
+        contentContainerStyle={{ paddingRight: 16 }}
       >
         <SummaryCard
           title="Monthly Revenue"

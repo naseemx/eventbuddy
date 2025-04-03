@@ -55,42 +55,44 @@ export const compressBase64Image = (base64?: string | null, maxSize: number = MA
 };
 
 /**
- * Debug image data to help diagnose issues
- * @param uri The image URI or data URL
- * @returns A string with debug info
+ * Debug helper function to identify the type of image data
+ * @param imageData String containing image data or URL
+ * @returns Object with type and debug info
  */
-export const debugImageData = (uri?: string | null): string => {
-  if (!uri) return 'No image data provided';
-  
-  let result = '';
-  
-  if (uri.startsWith('data:image')) {
-    result += 'Image type: Data URL\n';
+export const debugImageData = (imageData: string | null | undefined) => {
+  if (!imageData) {
+    return { type: 'None', message: 'No image data provided' };
+  }
+
+  if (imageData.startsWith('data:image')) {
+    // Base64 data URL
+    const match = imageData.match(/base64,(.+)/);
+    const base64Length = match && match[1] ? match[1].length : 0;
+    const sizeInKB = base64Length * 0.75 / 1024; // Approximate size in KB
     
-    const parts = uri.split('base64,');
-    if (parts.length === 2) {
-      const header = parts[0];
-      const base64Data = parts[1];
-      
-      result += `MIME type: ${header.replace('data:', '').replace(';base64,', '')}\n`;
-      result += `Base64 length: ${base64Data.length} bytes (${(base64Data.length / 1024 / 1024).toFixed(2)}MB)\n`;
-      result += `First 20 chars: ${base64Data.substring(0, 20)}...\n`;
-      result += `Last 20 chars: ...${base64Data.substring(base64Data.length - 20)}\n`;
-    } else {
-      result += 'Invalid data URL format\n';
-    }
-  } else if (uri.startsWith('http') || uri.startsWith('https')) {
-    result += 'Image type: Remote URL\n';
-    result += `URL: ${uri}\n`;
-  } else if (uri.startsWith('file://')) {
-    result += 'Image type: Local file\n';
-    result += `Path: ${uri}\n`;
-  } else {
-    result += 'Image type: Unknown\n';
-    result += `Data: ${uri.substring(0, 30)}...\n`;
+    return {
+      type: 'Base64',
+      size: `${sizeInKB.toFixed(2)} KB`,
+      preview: imageData.substring(0, 30) + '...'
+    };
+  } else if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
+    // Remote URL
+    return {
+      type: 'Remote URL',
+      URL: imageData
+    };
+  } else if (imageData.startsWith('/')) {
+    // Local file path
+    return {
+      type: 'Local file',
+      path: imageData
+    };
   }
   
-  return result;
+  return {
+    type: 'Unknown',
+    preview: imageData.substring(0, 30) + '...'
+  };
 };
 
 /**
@@ -157,7 +159,7 @@ export const processImagesForStorage = (images: Array<{ uri: string; base64?: st
   });
   
   // Filter out images with no valid base64 data after processing
-  const finalImages = processed.filter(img => img.base64);
+  const finalImages = processed.filter(img => img.base64 || (img.uri && (img.uri.startsWith('http://') || img.uri.startsWith('https://'))));
   
   console.log(`After processing: ${finalImages.length} valid images out of ${processed.length}`);
   

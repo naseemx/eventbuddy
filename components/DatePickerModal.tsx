@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 interface DatePickerModalProps {
@@ -92,13 +92,12 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
   // Calculate the grid columns (7 days per week)
   const calendarDays = generateCalendarDays();
 
-  // Format date as MM/DD/YYYY
+  // Format date as DD/MM/YY
   const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric',
-    });
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().slice(2);
+    return `${day}/${month}/${year}`;
   };
 
   return (
@@ -156,37 +155,39 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
           </View>
           
           {/* Calendar Grid */}
-          <View className="flex-row flex-wrap">
+          <View style={styles.calendar}>
             {calendarDays.map((day, index) => (
               <TouchableOpacity
                 key={index}
                 onPress={() => day && handleSelectDate(day)}
-                className={`w-1/7 aspect-square items-center justify-center p-1`}
+                style={styles.dayCell}
                 disabled={!day}
               >
                 {day ? (
                   <View 
-                    className={`w-10 h-10 rounded-full items-center justify-center
-                      ${selectedDate.getDate() === day && 
-                        selectedDate.getMonth() === calendarMonth && 
-                        selectedDate.getFullYear() === calendarYear 
-                          ? 'bg-blue-500' : 'bg-gray-100'}`
-                    }
+                    style={[
+                      styles.dayButton,
+                      selectedDate.getDate() === day && 
+                      selectedDate.getMonth() === calendarMonth && 
+                      selectedDate.getFullYear() === calendarYear 
+                        ? styles.selectedDay 
+                        : styles.normalDay
+                    ]}
                   >
                     <Text 
-                      className={`text-base ${
+                      style={
                         selectedDate.getDate() === day && 
                         selectedDate.getMonth() === calendarMonth && 
                         selectedDate.getFullYear() === calendarYear 
-                          ? 'text-white font-medium' 
-                          : 'text-gray-800'
-                      }`}
+                          ? styles.selectedDayText 
+                          : styles.normalDayText
+                      }
                     >
                       {day}
                     </Text>
                   </View>
                 ) : (
-                  <View className="w-10 h-10" />
+                  <View style={{ width: 36, height: 36 }} />
                 )}
               </TouchableOpacity>
             ))}
@@ -220,5 +221,40 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
     </Modal>
   );
 };
+
+// At the end of the file, add styles
+const styles = StyleSheet.create({
+  calendar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: '14.28%',
+    height: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+  },
+  dayButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedDay: {
+    backgroundColor: '#3B82F6',
+  },
+  normalDay: {
+    backgroundColor: '#F3F4F6',
+  },
+  selectedDayText: {
+    color: 'white',
+    fontWeight: '500',
+  },
+  normalDayText: {
+    color: '#1F2937',
+  },
+});
 
 export default DatePickerModal; 

@@ -31,13 +31,16 @@ const EventItem = ({
     <TouchableOpacity
       onPress={onPress}
       className="flex-row items-center p-3 mb-2 bg-white rounded-lg shadow-sm border border-gray-100"
+      activeOpacity={0.7}
+      hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+      delayPressIn={200}
     >
       <View className="h-10 w-10 rounded-full bg-blue-100 items-center justify-center mr-3">
         <Calendar size={20} color="#3b82f6" />
       </View>
-      <View className="flex-1">
-        <Text className="font-medium text-gray-900">{title}</Text>
-        <Text className="text-sm text-gray-500">
+      <View className="flex-1 mr-2">
+        <Text className="font-medium text-gray-900" numberOfLines={1} ellipsizeMode="tail">{title}</Text>
+        <Text className="text-sm text-gray-500" numberOfLines={1} ellipsizeMode="tail">
           {date} • {location}
         </Text>
       </View>
@@ -95,7 +98,10 @@ const UpcomingEvents = ({
         <Text className="text-lg font-semibold text-gray-900">
           Upcoming Events
         </Text>
-        <TouchableOpacity onPress={onViewAll}>
+        <TouchableOpacity 
+          onPress={onViewAll}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text className="text-blue-600 font-medium">View All</Text>
         </TouchableOpacity>
       </View>
@@ -117,6 +123,9 @@ const UpcomingEvents = ({
         <ScrollView
           className="max-h-[180px]"
           showsVerticalScrollIndicator={false}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          contentContainerStyle={{ paddingVertical: 2 }}
         >
           {events.map((event) => (
             <EventItem key={event.id} {...event} />

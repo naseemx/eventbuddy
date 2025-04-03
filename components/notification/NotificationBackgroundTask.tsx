@@ -11,6 +11,7 @@ const NOTIFICATION_BACKGROUND_TASK = 'NOTIFICATION_BACKGROUND_TASK';
 TaskManager.defineTask(NOTIFICATION_BACKGROUND_TASK, async () => {
   try {
     console.log('[Background Task] Checking for notifications...');
+    // This will check for event status changes and upcoming events
     await checkAllNotifications();
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (error) {
@@ -29,12 +30,21 @@ const NotificationBackgroundTask: React.FC<NotificationBackgroundTaskProps> = ({
   // Register background task to check for notifications
   const registerBackgroundTask = async () => {
     try {
+      // Check if task is already registered
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(NOTIFICATION_BACKGROUND_TASK);
+      
+      if (isRegistered) {
+        // If already registered, unregister it first to update the settings
+        await BackgroundFetch.unregisterTaskAsync(NOTIFICATION_BACKGROUND_TASK);
+      }
+      
+      // Register the task with a longer interval for better efficiency
       await BackgroundFetch.registerTaskAsync(NOTIFICATION_BACKGROUND_TASK, {
-        minimumInterval: 15 * 60, // 15 minutes in seconds
+        minimumInterval: 60 * 120, // 2 hours in seconds (increased from 30 minutes)
         stopOnTerminate: false,
         startOnBoot: true,
       });
-      console.log('Background task registered');
+      console.log('Background notification task registered with 2 hour interval');
     } catch (error) {
       console.error('Error registering background task:', error);
     }
@@ -44,11 +54,11 @@ const NotificationBackgroundTask: React.FC<NotificationBackgroundTaskProps> = ({
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
       // App has come to the foreground
-      console.log('App has come to the foreground');
+      console.log('App has come to the foreground, checking for notifications and event status changes');
       
-      // Check for notifications when app is foregrounded
+      // Check for notifications and update event statuses when app is foregrounded
       try {
-        await checkAllNotifications();
+        await checkAllNotifications(); // This includes updating event statuses
       } catch (error) {
         console.error('Error checking notifications in foreground:', error);
       }
@@ -64,7 +74,7 @@ const NotificationBackgroundTask: React.FC<NotificationBackgroundTaskProps> = ({
     // Register the background task
     registerBackgroundTask();
     
-    // Check for notifications on component mount
+    // Check for notifications and update event statuses on component mount
     checkAllNotifications().catch(error => {
       console.error('Error checking notifications on mount:', error);
     });

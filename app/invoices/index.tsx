@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   TextInput,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -84,23 +85,36 @@ export default function InvoicesScreen() {
 
     return (
       <TouchableOpacity
-        className="bg-white p-4 rounded-lg mb-3 shadow-sm border border-gray-100"
+        style={styles.card}
         onPress={() => router.push(`/finances/invoice-details?id=${item.id}`)}
       >
         <View className="flex-row justify-between items-start">
-          <View className="flex-1">
-            <Text className="text-lg font-semibold text-gray-900">
+          <View className="flex-1 mr-2">
+            <Text 
+              className="text-lg font-semibold text-gray-900"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {item.invoice_number}
             </Text>
             <View className="flex-row items-center mt-1">
               <User size={14} color="#6B7280" />
-              <Text className="text-gray-600 text-sm ml-1">
+              <Text 
+                className="text-gray-600 text-sm ml-1"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={{maxWidth: '90%'}}
+              >
                 {item.customer_name}
               </Text>
             </View>
-            <View className="flex-row items-center mt-1">
+            <View className="flex-row items-center mt-1 flex-wrap">
               <Calendar size={14} color="#6B7280" />
-              <Text className="text-gray-500 text-sm ml-1">
+              <Text 
+                className="text-gray-500 text-sm ml-1"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 Issued: {item.invoice_date ? new Date(item.invoice_date).toLocaleDateString() : 'N/A'} | 
                 Due: {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'N/A'}
               </Text>
@@ -118,7 +132,8 @@ export default function InvoicesScreen() {
         </View>
         <View className="flex-row justify-end mt-3 pt-2 border-t border-gray-100">
           <TouchableOpacity
-            className="flex-row items-center mr-3"
+            className="flex-row items-center mr-4"
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
             onPress={() =>
               router.push(`/finances/invoice-details?id=${item.id}`)
             }
@@ -128,6 +143,7 @@ export default function InvoicesScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             className="flex-row items-center"
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
             onPress={() => {
               console.log(`Downloading PDF for invoice ${item.id}`);
               // In a real app, you would generate and download a PDF
@@ -147,8 +163,8 @@ export default function InvoicesScreen() {
       <Header title="Invoices" />
 
       <View className="flex-1 px-4 pt-4">
-        <View className="flex-row justify-between items-center mb-4">
-          <View className="flex-row flex-1 mr-3">
+        <View className="flex-row mb-4">
+          <View className="flex-row flex-1 mr-2">
             <View className="flex-1 bg-white rounded-xl shadow-sm flex-row items-center px-3">
               <Search size={18} color="#6366f1" strokeWidth={2} />
               <TextInput
@@ -158,34 +174,40 @@ export default function InvoicesScreen() {
                 onChangeText={setSearchQuery}
               />
               {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <TouchableOpacity 
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                >
                   <Text className="text-gray-400 font-medium">✕</Text>
                 </TouchableOpacity>
               ) : null}
             </View>
-            <TouchableOpacity className="bg-white p-2.5 rounded-xl shadow-sm ml-2">
+            <TouchableOpacity 
+              className="bg-white p-2.5 rounded-xl shadow-sm ml-2"
+              hitSlop={{top: 5, bottom: 5, left: 5, right: 5}}
+            >
               <SlidersHorizontal size={20} color="#6366f1" strokeWidth={2} />
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2.5 rounded-xl flex-row items-center shadow-md"
+            style={styles.gradientButton}
             onPress={() => router.push("/invoices/create")}
           >
             <PlusCircle size={18} color="#FFFFFF" />
-            <Text className="text-white font-medium ml-2">Create Invoice</Text>
+            <Text className="text-white font-medium ml-2" numberOfLines={1}>Create</Text>
           </TouchableOpacity>
         </View>
 
         <View className="flex-row justify-between mb-5">
-          <View className="bg-white p-3.5 rounded-xl flex-1 mr-2 items-center shadow-sm">
+          <View className="bg-white p-3 rounded-xl flex-1 mr-2 items-center shadow-sm">
             <Text className="text-gray-600 text-sm font-medium">Total</Text>
             <Text className="text-lg font-bold text-gray-900">₹10,100</Text>
           </View>
-          <View className="bg-white p-3.5 rounded-xl flex-1 mr-2 items-center shadow-sm">
+          <View className="bg-white p-3 rounded-xl flex-1 mr-2 items-center shadow-sm">
             <Text className="text-gray-600 text-sm font-medium">Paid</Text>
             <Text className="text-lg font-bold text-emerald-600">₹3,350</Text>
           </View>
-          <View className="bg-white p-3.5 rounded-xl flex-1 items-center shadow-sm">
+          <View className="bg-white p-3 rounded-xl flex-1 items-center shadow-sm">
             <Text className="text-gray-600 text-sm font-medium">Pending</Text>
             <Text className="text-lg font-bold text-amber-600">₹6,750</Text>
           </View>
@@ -196,19 +218,22 @@ export default function InvoicesScreen() {
           renderItem={renderInvoiceItem}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+          contentContainerStyle={{ 
+            paddingBottom: insets.bottom + 80,
+            flexGrow: filteredInvoices.length === 0 ? 1 : undefined
+          }}
           ListEmptyComponent={
             isLoading ? (
-              <View className="py-10 items-center">
+              <View className="py-10 items-center justify-center flex-1">
                 <ActivityIndicator size="large" color="#6366f1" />
                 <Text className="text-gray-500 mt-3">Loading invoices...</Text>
               </View>
             ) : error ? (
-              <View className="py-10 items-center">
+              <View className="py-10 items-center justify-center flex-1">
                 <Text className="text-red-500">{error}</Text>
               </View>
             ) : (
-              <View className="py-10 items-center">
+              <View className="py-10 items-center justify-center flex-1">
                 <Text className="text-gray-500">No invoices found</Text>
               </View>
             )
@@ -216,9 +241,38 @@ export default function InvoicesScreen() {
         />
       </View>
 
-      <View className="absolute bottom-0 left-0 right-0">
-        <BottomNavigation activeTab="finances" />
+      <View className="left-0 right-0 bottom-0 absolute">
+        <BottomNavigation activeTab="invoices" />
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(229, 231, 235, 1)', // gray-100
+  },
+  gradientButton: {
+    backgroundColor: '#6366f1',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: "#6366f1",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  }
+});

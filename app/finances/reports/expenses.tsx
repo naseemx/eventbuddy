@@ -73,10 +73,54 @@ export default function ExpenseReport() {
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'month' | 'year' | 'custom'>('month');
   const [error, setError] = useState<string | null>(null);
+  const [filteredCategoryData, setFilteredCategoryData] = useState<any[]>([]);
+  const [filteredMonthlyData, setFilteredMonthlyData] = useState<any[]>([]);
+  const [filteredTotalExpenses, setFilteredTotalExpenses] = useState(0);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Apply filters when selectedTimeframe changes
+  useEffect(() => {
+    applyFilters();
+  }, [selectedTimeframe, transactions]);
+
+  const applyFilters = () => {
+    if (transactions.length === 0) return;
+    
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth();
+    
+    let filteredTransactions = [...transactions];
+    
+    if (selectedTimeframe === 'month') {
+      // Filter to current month only
+      filteredTransactions = transactions.filter(t => {
+        const transDate = new Date(t.transaction_date || new Date());
+        return transDate.getFullYear() === currentYear && transDate.getMonth() === currentMonth;
+      });
+    } else if (selectedTimeframe === 'year') {
+      // Filter to current year
+      filteredTransactions = transactions.filter(t => {
+        const transDate = new Date(t.transaction_date || new Date());
+        return transDate.getFullYear() === currentYear;
+      });
+    }
+    
+    // Update filtered category data
+    const newCategoryData = groupTransactionsByCategory(filteredTransactions);
+    setFilteredCategoryData(newCategoryData);
+    
+    // Update filtered monthly data
+    const newMonthlyData = groupTransactionsByMonth(filteredTransactions);
+    setFilteredMonthlyData(newMonthlyData);
+    
+    // Update filtered total
+    const newTotal = filteredTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
+    setFilteredTotalExpenses(newTotal);
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -112,11 +156,11 @@ export default function ExpenseReport() {
   };
 
   // Calculate highest value for chart scaling
-  const highestValue = categoryData.length > 0 ? categoryData[0].amount : 0;
+  const highestValue = filteredCategoryData.length > 0 ? filteredCategoryData[0].amount : 0;
 
   // Helper function to get percentage of total
   const getPercentage = (amount: number) => {
-    return totalExpenses > 0 ? ((amount / totalExpenses) * 100).toFixed(1) + '%' : '0%';
+    return filteredTotalExpenses > 0 ? ((amount / filteredTotalExpenses) * 100).toFixed(1) + '%' : '0%';
   };
 
   // Calculate current year's expenses
@@ -210,7 +254,7 @@ export default function ExpenseReport() {
                 </Text>
                 
                 <Text className="text-2xl font-bold text-red-600 mb-2">
-                  {formatCurrency(selectedTimeframe === 'month' ? currentMonthExpenses : currentYearExpenses)}
+                  {formatCurrency(filteredTotalExpenses)}
                 </Text>
                 
                 <Text className="text-gray-500 text-sm">
@@ -222,45 +266,57 @@ export default function ExpenseReport() {
             <View className="mb-6">
               <Text className="text-lg font-semibold mb-4">Expenses by Category</Text>
               
-              {categoryData.map((item, index) => (
-                <View key={item.category} className="bg-white rounded-lg p-4 mb-3">
-                  <View className="flex-row justify-between mb-2">
-                    <Text className="font-semibold">{item.category}</Text>
-                    <Text className="font-semibold text-red-600">{formatCurrency(item.amount)}</Text>
+              {filteredCategoryData.length > 0 ? (
+                filteredCategoryData.map((item, index) => (
+                  <View key={item.category} className="bg-white rounded-lg p-4 mb-3">
+                    <View className="flex-row justify-between mb-2">
+                      <Text className="font-semibold">{item.category}</Text>
+                      <Text className="font-semibold text-red-600">{formatCurrency(item.amount)}</Text>
+                    </View>
+                    
+                    <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-1">
+                      <View 
+                        className="h-full bg-red-500 rounded-full" 
+                        style={{ width: `${(item.amount / highestValue) * 100}%` }} 
+                      />
+                    </View>
+                    
+                    <Text className="text-xs text-gray-500 text-right">
+                      {getPercentage(item.amount)} of total expenses
+                    </Text>
                   </View>
-                  
-                  <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-1">
-                    <View 
-                      className="h-full bg-red-500 rounded-full" 
-                      style={{ width: `${(item.amount / highestValue) * 100}%` }} 
-                    />
-                  </View>
-                  
-                  <Text className="text-xs text-gray-500 text-right">
-                    {getPercentage(item.amount)} of total expenses
-                  </Text>
+                ))
+              ) : (
+                <View className="bg-white rounded-lg p-4 mb-3 items-center">
+                  <Text className="text-gray-500">No data available for this period</Text>
                 </View>
-              ))}
+              )}
             </View>
 
             <View className="mb-6">
               <Text className="text-lg font-semibold mb-4">Monthly Expense Trend</Text>
               
-              {monthlyData.slice(0, 12).map((item, index) => (
-                <View key={item.monthYear} className="bg-white rounded-lg p-4 mb-3">
-                  <View className="flex-row justify-between mb-2">
-                    <Text className="font-semibold">{getMonthName(item.monthYear)}</Text>
-                    <Text className="font-semibold text-red-600">{formatCurrency(item.amount)}</Text>
+              {filteredMonthlyData.length > 0 ? (
+                filteredMonthlyData.map((item, index) => (
+                  <View key={item.monthYear} className="bg-white rounded-lg p-4 mb-3">
+                    <View className="flex-row justify-between mb-2">
+                      <Text className="font-semibold">{getMonthName(item.monthYear)}</Text>
+                      <Text className="font-semibold text-red-600">{formatCurrency(item.amount)}</Text>
+                    </View>
+                    
+                    <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <View 
+                        className="h-full bg-red-500 rounded-full" 
+                        style={{ width: `${(item.amount / (filteredMonthlyData[0]?.amount || 1)) * 100}%` }} 
+                      />
+                    </View>
                   </View>
-                  
-                  <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <View 
-                      className="h-full bg-red-500 rounded-full" 
-                      style={{ width: `${(item.amount / (monthlyData[0]?.amount || 1)) * 100}%` }} 
-                    />
-                  </View>
+                ))
+              ) : (
+                <View className="bg-white rounded-lg p-4 mb-3 items-center">
+                  <Text className="text-gray-500">No data available for this period</Text>
                 </View>
-              ))}
+              )}
             </View>
 
             <View className="mb-6">

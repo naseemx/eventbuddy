@@ -4,8 +4,10 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Switch,
+  Platform,
+  StatusBar,
+  Animated as RNAnimated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -20,9 +22,13 @@ import {
 import { router } from "expo-router";
 import Constants from "expo-constants";
 import * as Notifications from 'expo-notifications';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import Header from "../../components/Header";
 import BottomNavigation from "../../components/navigation/BottomNavigation";
+import OptimizedImage from "../../components/OptimizedImage";
+import { useCompany } from "../../services/companyContext";
+import SafeScreenContainer from "../../components/layout/SafeScreenContainer";
 
 interface SettingsSectionProps {
   title: string;
@@ -30,10 +36,13 @@ interface SettingsSectionProps {
 }
 
 const SettingsSection = ({ title, children }: SettingsSectionProps) => (
-  <View className="mb-6">
+  <Animated.View 
+    className="mb-6"
+    entering={FadeInDown.duration(400).springify()}
+  >
     <Text className="text-sm font-medium text-gray-500 mb-2">{title}</Text>
-    <View className="bg-white rounded-lg overflow-hidden">{children}</View>
-  </View>
+    <View className="bg-white rounded-lg overflow-hidden shadow-sm">{children}</View>
+  </Animated.View>
 );
 
 interface SettingsItemProps {
@@ -56,11 +65,13 @@ const SettingsItem = ({
   <TouchableOpacity
     onPress={onPress}
     className={`flex-row items-center p-4 ${!isLast ? "border-b border-gray-100" : ""}`}
+    activeOpacity={0.7}
+    hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
   >
-    <View className="mr-3">{icon}</View>
+    <View className="mr-3 w-8 items-center">{icon}</View>
     <View className="flex-1">
-      <Text className="font-medium text-gray-900">{title}</Text>
-      {subtitle && <Text className="text-sm text-gray-500">{subtitle}</Text>}
+      <Text className="font-medium text-gray-900" numberOfLines={1} ellipsizeMode="tail">{title}</Text>
+      {subtitle && <Text className="text-sm text-gray-500" numberOfLines={1} ellipsizeMode="tail">{subtitle}</Text>}
     </View>
     {rightElement || <ChevronRight size={18} color="#9CA3AF" />}
   </TouchableOpacity>
@@ -69,6 +80,7 @@ const SettingsItem = ({
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  const { companyData, loading } = useCompany();
   
   // Get app version from expo constants
   const appVersion = Constants.expoConfig?.version || "1.0.0";
@@ -103,7 +115,8 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <Header title="Settings" />
 
       <ScrollView
@@ -115,27 +128,45 @@ export default function SettingsScreen() {
         }}
       >
         {/* User Profile Section */}
-        <View className="bg-white p-4 rounded-lg mb-6 items-center">
-          <View className="w-20 h-20 rounded-full bg-blue-500 mb-3 items-center justify-center">
-            <Text className="text-white text-2xl font-bold">TF</Text>
+        <Animated.View 
+          className="bg-white p-4 rounded-lg mb-6 items-center shadow-sm"
+          entering={FadeInDown.duration(400).springify()}
+        >
+          <View className="relative">
+            {companyData?.logo ? (
+              <OptimizedImage
+                source={companyData.logo}
+                style={{ width: 80, height: 80, borderRadius: 40 }}
+                resizeMode="cover"
+                showPlaceholder={true}
+                placeholderText={companyData.name?.charAt(0) || "C"}
+              />
+            ) : (
+              <View className="w-20 h-20 rounded-full bg-blue-500 items-center justify-center">
+                <Text className="text-white text-2xl font-bold">
+                  {companyData?.name?.charAt(0) || "C"}
+                </Text>
+              </View>
+            )}
           </View>
-          <Text className="text-xl font-bold">TechFlow Solutions</Text>
+          <Text className="text-xl font-bold mt-3" numberOfLines={1} ellipsizeMode="tail">{companyData?.name || "Company Name"}</Text>
           <Text className="text-gray-500">Company Profile</Text>
           <TouchableOpacity 
             className="mt-3 bg-blue-50 px-4 py-2 rounded-full"
-            onPress={() => router.push("/profile/edit")}
+            onPress={() => router.push("/profile")}
+            activeOpacity={0.7}
           >
-            <Text className="text-blue-600 font-medium">Edit Company</Text>
+            <Text className="text-blue-600 font-medium">View Company Profile</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Account Settings */}
         <SettingsSection title="ACCOUNT SETTINGS">
           <SettingsItem
             icon={<Building size={20} color="#4B5563" />}
-            title="Company Information"
-            subtitle="Update your company details"
-            onPress={() => router.push("/settings/company-information")}
+            title="Company Profile"
+            subtitle="View and edit your company details"
+            onPress={() => router.push("/profile")}
           />
           <SettingsItem
             icon={<Bell size={20} color="#4B5563" />}
@@ -187,18 +218,21 @@ export default function SettingsScreen() {
         </SettingsSection>
 
         {/* Logout */}
-        <TouchableOpacity
-          className="bg-red-50 p-4 rounded-lg flex-row items-center justify-center mt-4"
-          onPress={() => console.log("Logout pressed")}
-        >
-          <LogOut size={20} color="#EF4444" />
-          <Text className="text-red-600 font-medium ml-2">Logout</Text>
-        </TouchableOpacity>
+        <Animated.View entering={FadeInDown.duration(400).delay(300).springify()}>
+          <TouchableOpacity
+            className="bg-red-50 p-4 rounded-lg flex-row items-center justify-center mt-4 border border-red-100"
+            onPress={() => router.push("/login")}
+            activeOpacity={0.7}
+          >
+            <LogOut size={20} color="#EF4444" />
+            <Text className="text-red-600 font-medium ml-2">Logout</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
 
       <View className="absolute bottom-0 left-0 right-0">
         <BottomNavigation activeTab="dashboard" />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

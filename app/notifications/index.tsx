@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -21,12 +22,14 @@ import {
   ChevronRight,
   Filter,
 } from "lucide-react-native";
+import * as Notifications from 'expo-notifications';
 
 import Header from "../../components/Header";
 import { 
   getNotifications, 
   markNotificationAsRead, 
   checkAllNotifications,
+  sendTestNotification,
   Notification 
 } from "../../services/notificationService";
 
@@ -76,6 +79,7 @@ export default function NotificationsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSendingTest, setIsSendingTest] = useState(false);
   
   // Fetch notifications when the screen is focused
   useFocusEffect(
@@ -207,6 +211,59 @@ export default function NotificationsScreen() {
     );
   };
 
+  const handleSendTestNotification = async () => {
+    try {
+      setIsSendingTest(true);
+      
+      // First, check permissions
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Requesting notification permissions...');
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          Alert.alert(
+            "Permission Required", 
+            "You need to enable notifications in your device settings to receive notifications.",
+            [{ text: "OK", style: "default" }]
+          );
+          setIsSendingTest(false);
+          return;
+        }
+      }
+      
+      // Send the test notification
+      console.log('Sending test notification...');
+      const success = await sendTestNotification();
+      
+      if (success) {
+        // Show a success message
+        Alert.alert(
+          "Test Notification Sent", 
+          "If you don't see the notification, please check your device's notification settings.",
+          [{ text: "OK", style: "default" }]
+        );
+        
+        // Refresh the list to show the new test notification
+        await fetchNotifications();
+      } else {
+        Alert.alert(
+          "Notification Failed", 
+          "Failed to send test notification. Please check the console logs for more details.",
+          [{ text: "OK", style: "default" }]
+        );
+      }
+    } catch (error) {
+      console.error('Failed to send test notification:', error);
+      Alert.alert(
+        "Error", 
+        "An error occurred while sending the test notification.",
+        [{ text: "OK", style: "default" }]
+      );
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   return (
     <PageTransition type="fade">
       <SafeAreaView className="flex-1 bg-gray-100">
@@ -221,12 +278,25 @@ export default function NotificationsScreen() {
             <Text className="text-lg font-semibold text-gray-800">
               All Notifications
             </Text>
-            <TouchableOpacity 
-              className="bg-white p-2 rounded-lg shadow-sm"
-              onPress={fetchNotifications}
-            >
-              <Filter size={20} color="#4B5563" />
-            </TouchableOpacity>
+            <View className="flex-row">
+              <TouchableOpacity 
+                className="bg-blue-500 p-2 rounded-lg shadow-sm mr-2"
+                onPress={handleSendTestNotification}
+                disabled={isSendingTest}
+              >
+                {isSendingTest ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Bell size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity 
+                className="bg-white p-2 rounded-lg shadow-sm"
+                onPress={fetchNotifications}
+              >
+                <Filter size={20} color="#4B5563" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {isLoading && !refreshing ? (
@@ -248,10 +318,16 @@ export default function NotificationsScreen() {
               <Bell size={40} color="#9CA3AF" />
               <Text className="text-gray-500 mt-3">No notifications yet</Text>
               <TouchableOpacity 
-                className="mt-3 px-4 py-2 bg-blue-500 rounded-md"
-                onPress={fetchNotifications}
+                className="mt-4 bg-blue-500 px-4 py-2 rounded-lg flex-row items-center"
+                onPress={handleSendTestNotification}
+                disabled={isSendingTest}
               >
-                <Text className="text-white font-medium">Refresh</Text>
+                {isSendingTest ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" className="mr-2" />
+                ) : (
+                  <Bell size={18} color="#FFFFFF" className="mr-2" />
+                )}
+                <Text className="text-white font-medium">Send Test Notification</Text>
               </TouchableOpacity>
             </View>
           ) : (

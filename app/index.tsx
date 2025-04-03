@@ -93,7 +93,7 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
       <Header title="Dashboard" />
 
@@ -140,6 +140,6 @@ export default function Dashboard() {
       <View className="absolute bottom-0 left-0 right-0">
         <BottomNavigation activeTab="dashboard" />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

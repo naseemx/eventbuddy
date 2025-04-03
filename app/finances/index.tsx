@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -24,6 +25,7 @@ import {
   PieChart,
   FileSpreadsheet,
   User,
+  X,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -43,8 +45,51 @@ export default function FinancesScreen() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [error, setError] = useState<string | null>(null);
   
+  // Add search and filter states
+  const [searchText, setSearchText] = useState<string>("");
+  const [filterType, setFilterType] = useState<"income" | "expense" | null>(null);
+  const [showFilterMenu, setShowFilterMenu] = useState<boolean>(false);
+  
   // Add state for tracking when to refresh data
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Add state for limiting transactions display
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const TRANSACTION_LIMIT = 5;
+  
+  // Add filtered data handling
+  const filteredTransactions = transactions.filter(transaction => {
+    // Apply search filter
+    const matchesSearch = searchText === "" || 
+      transaction.description?.toLowerCase().includes(searchText.toLowerCase()) ||
+      transaction.category?.toLowerCase().includes(searchText.toLowerCase());
+    
+    // Apply type filter
+    const matchesType = filterType === null || transaction.type === filterType;
+    
+    return matchesSearch && matchesType;
+  });
+  
+  const filteredInvoices = invoices.filter(invoice => {
+    // Apply search filter
+    const matchesSearch = searchText === "" || 
+      invoice.invoice_number?.toLowerCase().includes(searchText.toLowerCase()) ||
+      invoice.customer_name?.toLowerCase().includes(searchText.toLowerCase());
+    
+    return matchesSearch;
+  });
+  
+  // Limit transactions to display only the latest ones
+  const displayedTransactions = showAllTransactions ? 
+    filteredTransactions : 
+    filteredTransactions.slice(0, TRANSACTION_LIMIT);
+  
+  // Function to clear filters
+  const clearFilters = () => {
+    setSearchText("");
+    setFilterType(null);
+    setShowFilterMenu(false);
+  };
   
   // Use useFocusEffect to detect when the screen comes into focus
   useFocusEffect(
@@ -91,9 +136,10 @@ export default function FinancesScreen() {
         onPress={() =>
           router.push(`/finances/transaction-details?id=${item.id}` as any)
         }
+        hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
       >
         <View className="flex-row justify-between items-center">
-          <View className="flex-row items-center">
+          <View className="flex-row items-center flex-1">
             <View
               className={`w-10 h-10 rounded-full items-center justify-center ${
                 item.type === "income" ? "bg-green-100" : "bg-red-100"
@@ -105,12 +151,12 @@ export default function FinancesScreen() {
                 <TrendingDown size={20} color="#EF4444" />
               )}
             </View>
-            <View className="ml-3">
-              <Text className="font-semibold text-gray-900">
+            <View className="ml-3 flex-1">
+              <Text className="font-semibold text-gray-900" numberOfLines={1} ellipsizeMode="tail">
                 {item.description}
               </Text>
               <View className="flex-row items-center">
-                <Text className="text-gray-500 text-sm">
+                <Text className="text-gray-500 text-sm" numberOfLines={1} ellipsizeMode="tail">
                   {item.transaction_date
                     ? new Date(item.transaction_date).toLocaleDateString()
                     : "No date"}{" "}
@@ -147,6 +193,7 @@ export default function FinancesScreen() {
                   );
                 }
               }}
+              hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
             >
               <Text className="text-xs text-blue-600">
                 {item.reference_type === "order"
@@ -183,11 +230,12 @@ export default function FinancesScreen() {
       <TouchableOpacity
         className="bg-white p-4 rounded-lg shadow-sm mb-3 border border-gray-100"
         onPress={() => router.push(`/finances/invoice-details?id=${item.id}` as any)}
+        hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
       >
         <View className="flex-row justify-between items-start">
-          <View>
-            <Text className="font-medium text-gray-900">#{item.invoice_number}</Text>
-            <Text className="text-gray-600 mb-1">{item.customer_name}</Text>
+          <View className="flex-1 mr-2">
+            <Text className="font-medium text-gray-900" numberOfLines={1} ellipsizeMode="tail">#{item.invoice_number}</Text>
+            <Text className="text-gray-600 mb-1" numberOfLines={1} ellipsizeMode="tail">{item.customer_name}</Text>
             <Text className="text-xs text-gray-500">
               Due: {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'No due date'}
             </Text>
@@ -268,6 +316,17 @@ export default function FinancesScreen() {
                 <Text className="text-lg font-semibold">
                   Recent Transactions
                 </Text>
+                <View className="flex-row">
+                  {filteredTransactions.length > TRANSACTION_LIMIT && (
+                    <TouchableOpacity
+                      className="bg-white border border-blue-500 px-3 py-2 rounded-lg flex-row items-center mr-2"
+                      onPress={() => setShowAllTransactions(!showAllTransactions)}
+                    >
+                      <Text className="text-blue-500 font-medium">
+                        {showAllTransactions ? "Show Less" : "View All"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 <TouchableOpacity
                   className="bg-blue-500 px-4 py-2 rounded-lg flex-row items-center"
                   onPress={() => router.push("/finances/add-expense" as any)}
@@ -275,18 +334,61 @@ export default function FinancesScreen() {
                   <Plus size={16} color="#FFFFFF" />
                   <Text className="text-white font-medium ml-1">Add</Text>
                 </TouchableOpacity>
+                </View>
               </View>
 
               <View className="flex-row space-x-3 mb-4">
-                <TouchableOpacity className="flex-1 bg-white border border-gray-200 rounded-lg p-2 flex-row justify-center items-center">
+                <View className="flex-1 bg-white border border-gray-200 rounded-lg p-2 flex-row items-center">
                   <Search size={18} color="#6B7280" />
-                  <Text className="ml-2 text-gray-500">Search</Text>
+                  <TextInput
+                    placeholder="Search transactions..."
+                    className="ml-2 flex-1"
+                    value={searchText}
+                    onChangeText={setSearchText}
+                  />
+                  {searchText ? (
+                    <TouchableOpacity onPress={() => setSearchText("")}>
+                      <X size={16} color="#9CA3AF" />
                 </TouchableOpacity>
-                <TouchableOpacity className="bg-white border border-gray-200 rounded-lg p-2 flex-row justify-center items-center px-4">
-                  <Filter size={18} color="#6B7280" />
-                  <Text className="ml-2 text-gray-500">Filter</Text>
+                  ) : null}
+                </View>
+                <TouchableOpacity 
+                  className={`bg-white border ${showFilterMenu ? 'border-blue-500' : 'border-gray-200'} rounded-lg p-2 flex-row justify-center items-center px-4`}
+                  onPress={() => setShowFilterMenu(!showFilterMenu)}
+                >
+                  <Filter size={18} color={showFilterMenu ? "#3B82F6" : "#6B7280"} />
+                  <Text className={`ml-2 ${showFilterMenu ? 'text-blue-500' : 'text-gray-500'}`}>Filter</Text>
                 </TouchableOpacity>
               </View>
+              
+              {showFilterMenu && (
+                <View className="bg-white rounded-lg p-4 mb-4 shadow-sm">
+                  <Text className="font-medium mb-2">Filter by Type</Text>
+                  <View className="flex-row mb-2">
+                    <TouchableOpacity
+                      className={`mr-2 py-1 px-3 rounded-full ${filterType === 'income' ? 'bg-green-100 border border-green-500' : 'bg-gray-100'}`}
+                      onPress={() => setFilterType(filterType === 'income' ? null : 'income')}
+                    >
+                      <Text className={filterType === 'income' ? 'text-green-700' : 'text-gray-700'}>Income</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className={`mr-2 py-1 px-3 rounded-full ${filterType === 'expense' ? 'bg-red-100 border border-red-500' : 'bg-gray-100'}`}
+                      onPress={() => setFilterType(filterType === 'expense' ? null : 'expense')}
+                    >
+                      <Text className={filterType === 'expense' ? 'text-red-700' : 'text-gray-700'}>Expense</Text>
+                    </TouchableOpacity>
+                    
+                    {(filterType !== null || searchText !== '') && (
+                      <TouchableOpacity
+                        className="ml-auto bg-gray-200 py-1 px-3 rounded-full"
+                        onPress={clearFilters}
+                      >
+                        <Text className="text-gray-700">Clear All</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
 
               {isLoading ? (
                 <View className="items-center justify-center py-8">
@@ -303,12 +405,23 @@ export default function FinancesScreen() {
                   </Text>
                 </View>
               ) : (
+                <>
                 <FlatList
-                  data={transactions}
+                    data={displayedTransactions}
                   renderItem={renderTransactionItem}
                   keyExtractor={(item) => item.id}
                   scrollEnabled={false}
                 />
+                  
+                  {!showAllTransactions && filteredTransactions.length > TRANSACTION_LIMIT && (
+                    <TouchableOpacity 
+                      className="mt-3 bg-gray-100 py-2 rounded-lg items-center"
+                      onPress={() => router.push("/finances/transactions" as any)}
+                    >
+                      <Text className="text-gray-700">View All Transactions</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               )}
             </>
           )}
@@ -401,7 +514,7 @@ export default function FinancesScreen() {
                 </View>
               ) : (
                 <FlatList
-                  data={invoices.slice(0, 3)} // Show only the first 3 invoices
+                  data={filteredInvoices}
                   renderItem={renderInvoiceItem}
                   keyExtractor={(item) => item.id}
                   scrollEnabled={false}

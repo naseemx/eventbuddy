@@ -92,7 +92,7 @@ export default function RecordPaymentScreen() {
       if (statusUpdated) {
         // Create transaction record with order reference
         const description = invoice.order_id 
-          ? `Payment received for rental order #${invoice.order_id.substring(0, 8)}`
+          ? `Rental Order Payment`
           : `Payment for Invoice #${invoice.invoice_number}`;
           
         const transactionData = {
@@ -100,7 +100,7 @@ export default function RecordPaymentScreen() {
           amount: parseFloat(paymentAmount),
           description: description,
           transaction_date: paymentDate.toISOString().split('T')[0],
-          category: 'Invoice Payment',
+          category: invoice.order_id ? 'Rental Payment' : 'Invoice Payment',
           payment_method: paymentMethod,
           reference_id: invoiceId as string,
           reference_type: 'invoice' as 'invoice',

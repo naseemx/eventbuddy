@@ -60,7 +60,10 @@ const ActiveRentals = ({
     <View className="bg-white p-4 rounded-lg shadow-sm">
       <View className="flex-row justify-between items-center mb-3">
         <Text className="text-lg font-bold">Active Rentals</Text>
-        <TouchableOpacity onPress={() => router.push("/orders" as any)}>
+        <TouchableOpacity 
+          onPress={() => router.push("/orders" as any)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text className="text-blue-500">View All</Text>
         </TouchableOpacity>
       </View>
@@ -82,27 +85,33 @@ const ActiveRentals = ({
         <ScrollView
           className="max-h-[180px]"
           showsVerticalScrollIndicator={false}
+          scrollEnabled={true}
+          nestedScrollEnabled={true}
+          contentContainerStyle={{ paddingVertical: 2 }}
         >
           {rentals.map((rental) => (
             <TouchableOpacity
               key={rental.id}
               className={`p-3 mb-2 rounded-md border-l-4 ${rental.daysRemaining <= 2 ? "border-red-500 bg-red-50" : "border-green-500 bg-white"}`}
               onPress={() => onViewRental(rental.id)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+              delayPressIn={200}
             >
               <View className="flex-row justify-between items-start">
-                <View className="flex-1">
+                <View className="flex-1 mr-2">
                   <View className="flex-row items-center mb-1">
                     <User size={14} className="text-gray-600 mr-1" />
-                    <Text className="font-semibold">{rental.customerName}</Text>
+                    <Text className="font-semibold" numberOfLines={1} ellipsizeMode="tail">{rental.customerName}</Text>
                   </View>
-                  <Text className="text-gray-600 text-sm mb-1">
+                  <Text className="text-gray-600 text-sm mb-1" numberOfLines={1} ellipsizeMode="tail">
                     {rental.items.length > 1
                       ? `${rental.items[0]} +${rental.items.length - 1} more`
                       : rental.items[0]}
                   </Text>
                   <View className="flex-row items-center">
                     <Calendar size={14} className="text-gray-500 mr-1" />
-                    <Text className="text-gray-500 text-xs">
+                    <Text className="text-gray-500 text-xs" numberOfLines={1} ellipsizeMode="tail">
                       {rental.returnDate}
                     </Text>
                   </View>

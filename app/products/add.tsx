@@ -26,6 +26,7 @@ import Header from "../../components/Header";
 import Notification from "../../components/Notification";
 import DatePickerModal from "../../components/DatePickerModal";
 import SafeImage from "../../components/SafeImage";
+import OptimizedImage from "../../components/OptimizedImage";
 
 // Generate array of month names
 const MONTHS = [
@@ -401,10 +402,24 @@ export default function ProductAddScreen() {
       // Create a temporary ID for new products to organize images in storage
       const tempId = isEditing ? id : `temp-${Date.now()}`;
       
+      // Prepare image data for upload - properly handle both base64 and URL-based images
+      const imageData = processedImages.map(img => {
+        // If we have base64 data, create a data URL for it
+        if (img.base64) {
+          return `data:image/jpeg;base64,${img.base64}`;
+        }
+        // If no base64 but have a valid URL, pass it as is
+        else if (img.uri && (img.uri.startsWith('http://') || img.uri.startsWith('https://'))) {
+          return img.uri;
+        }
+        // Default empty string for invalid images will be filtered out by updateProductImages
+        return '';
+      });
+      
       // Upload images to Supabase storage, deleting old ones if editing
       const imageUrls = await updateProductImages(
         tempId as string, 
-        processedImages.map(img => img.base64 ? `data:image/jpeg;base64,${img.base64}` : ''),
+        imageData,
         isEditing // Only clean up old images when editing
       );
       
@@ -518,13 +533,14 @@ export default function ProductAddScreen() {
             <View className="flex-row flex-wrap">
               {images.map((image, index) => (
                 <View key={index} className="w-1/3 p-1 relative">
-                  <SafeImage
+                  <OptimizedImage
                     source={image.uri}
                     style={{ width: '100%', height: 96, borderRadius: 8 }}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  className="absolute top-2 right-2 bg-white p-1 rounded-full"
+                    resizeMode="cover"
+                    priority="normal"
+                  />
+                  <TouchableOpacity
+                    className="absolute top-2 right-2 bg-white p-1 rounded-full"
                     onPress={() => removeImage(index)}
                   >
                     <X size={16} color="#EF4444" />

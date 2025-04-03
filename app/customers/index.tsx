@@ -7,17 +7,20 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 import {
   Plus,
   Search,
-  Filter,
   User,
   Phone,
-  Package,
-  AlertCircle
+  Mail,
+  AlertCircle,
+  MapPin,
+  ChevronRight
 } from "lucide-react-native";
 
 import Header from "../../components/Header";
@@ -30,6 +33,7 @@ export default function CustomersScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchCustomers = useCallback(async () => {
     try {
@@ -69,23 +73,78 @@ export default function CustomersScreen() {
     setRefreshing(false);
   }, [fetchCustomers]);
 
+  // Filter customers based on search query
+  const filteredCustomers = searchQuery
+    ? customers.filter(
+        (customer) =>
+          customer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          customer.phone?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : customers;
+
   const renderCustomerItem = ({ item }: { item: Customer }) => {
     return (
       <TouchableOpacity
-        className="bg-white p-4 rounded-lg mb-3 shadow-sm border border-gray-100"
+        style={styles.card}
         onPress={() => router.push(`/customers/view?id=${item.id}`)}
+        activeOpacity={0.7}
       >
-        <View className="flex-row justify-between items-start">
+        <View className="flex-row items-center mb-2">
+          <View className="h-10 w-10 rounded-full bg-blue-100 items-center justify-center mr-3">
+            <User size={18} color="#3b82f6" />
+          </View>
           <View className="flex-1">
-            <Text className="text-lg font-semibold text-gray-900">
+            <Text 
+              className="text-base font-semibold text-gray-900"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {item.name}
             </Text>
-            <Text className="text-gray-500 text-sm mt-1">{item.email}</Text>
-            <View className="flex-row items-center mt-1">
-              <Phone size={14} color="#6B7280" />
-              <Text className="text-gray-500 text-sm ml-1">{item.phone}</Text>
-            </View>
           </View>
+          <ChevronRight size={18} color="#9ca3af" />
+        </View>
+        
+        <View className="ml-13 pl-1 border-l-2 border-gray-100">
+          {item.email && (
+            <View className="flex-row items-center ml-3 mb-1.5">
+              <Mail size={14} color="#6B7280" />
+              <Text 
+                className="text-gray-700 text-sm ml-2"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.email}
+              </Text>
+            </View>
+          )}
+          
+          {item.phone && (
+            <View className="flex-row items-center ml-3 mb-1.5">
+              <Phone size={14} color="#6B7280" />
+              <Text 
+                className="text-gray-700 text-sm ml-2"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.phone}
+              </Text>
+            </View>
+          )}
+          
+          {item.address && (
+            <View className="flex-row items-center ml-3">
+              <MapPin size={14} color="#6B7280" />
+              <Text 
+                className="text-gray-700 text-sm ml-2"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.address}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -116,34 +175,39 @@ export default function CustomersScreen() {
       );
     }
 
-    if (customers.length === 0) {
+    if (filteredCustomers.length === 0) {
       return (
         <View className="flex-1 justify-center items-center p-6">
           <User size={40} color="#9CA3AF" />
           <Text className="mt-4 text-gray-800 font-medium text-center">
-            No customers found
+            {searchQuery ? "No matching customers found" : "No customers found"}
           </Text>
           <Text className="mt-2 text-gray-600 text-center">
-            Add your first customer to get started
+            {searchQuery ? "Try a different search term" : "Add your first customer to get started"}
           </Text>
-          <TouchableOpacity
-            className="mt-4 px-4 py-2 bg-blue-500 rounded-lg flex-row items-center"
-            onPress={() => router.push("/customers/add")}
-          >
-            <Plus size={18} color="#FFFFFF" />
-            <Text className="text-white font-medium ml-1">Add Customer</Text>
-          </TouchableOpacity>
+          {!searchQuery && (
+            <TouchableOpacity
+              className="mt-4 px-4 py-2 bg-blue-500 rounded-lg flex-row items-center"
+              onPress={() => router.push("/customers/add")}
+            >
+              <Plus size={18} color="#FFFFFF" />
+              <Text className="text-white font-medium ml-1">Add Customer</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
 
     return (
       <FlatList
-        data={customers}
+        data={filteredCustomers}
         renderItem={renderCustomerItem}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+        contentContainerStyle={{ 
+          paddingBottom: insets.bottom + 80,
+          flexGrow: filteredCustomers.length === 0 ? 1 : undefined
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -155,29 +219,49 @@ export default function CustomersScreen() {
     <SafeAreaView className="flex-1 bg-gray-100">
       <Header title="Customers" />
       <View className="flex-1 px-4 pt-4">
-        <View className="flex-row justify-between items-center mb-4 animate-none">
-          <View className="flex-row">
-            <TouchableOpacity className="bg-white p-2 rounded-lg mr-2 shadow-sm">
-              <Search size={20} color="#4B5563" />
-            </TouchableOpacity>
-            <TouchableOpacity className="bg-white p-2 rounded-lg shadow-sm">
-              <Filter size={20} color="#4B5563" />
-            </TouchableOpacity>
+        <View className="flex-row mb-4">
+          <View className="flex-row flex-1">
+            <View className="flex-1 bg-white rounded-lg shadow-sm flex-row items-center px-3">
+              <Search size={18} color="#4B5563" />
+              <TextInput
+                className="flex-1 py-2.5 px-2"
+                placeholder="Search customers..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
           </View>
+          
           <TouchableOpacity
-            className="px-3 py-2 rounded-lg flex-row items-center bg-[#4489f0]"
+            className="ml-2 bg-blue-500 rounded-lg items-center justify-center px-4"
             onPress={() => router.push("/customers/add")}
           >
-            <Plus size={18} color="#FFFFFF" />
-            <Text className="text-white font-medium ml-1">Add Customer</Text>
+            <Plus size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
         {renderContent()}
       </View>
-      <View className="absolute bottom-0 left-0 right-0">
+
+      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
         <BottomNavigation activeTab="customers" />
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#F3F4F6"
+  }
+});

@@ -65,10 +65,38 @@ export default function ProfitLossReport() {
   }>({ income: 0, expense: 0, profit: 0 });
   const [selectedTimeframe, setSelectedTimeframe] = useState<'month' | 'year' | 'custom'>('month');
   const [error, setError] = useState<string | null>(null);
+  const [filteredMonthlyData, setFilteredMonthlyData] = useState<any[]>([]);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Apply filters when selectedTimeframe changes
+  useEffect(() => {
+    applyFilters();
+  }, [selectedTimeframe, monthlyData]);
+
+  const applyFilters = () => {
+    if (monthlyData.length === 0) return;
+    
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    
+    let filtered = [...monthlyData];
+    
+    if (selectedTimeframe === 'month') {
+      // Filter to current month only
+      filtered = monthlyData.filter(item => 
+        item.year === currentYear && item.month === currentMonth
+      );
+    } else if (selectedTimeframe === 'year') {
+      // Filter to current year
+      filtered = monthlyData.filter(item => item.year === currentYear);
+    }
+    
+    setFilteredMonthlyData(filtered);
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -127,9 +155,11 @@ export default function ProfitLossReport() {
   };
 
   // Calculate highest value for chart scaling
-  const highestValue = monthlyData.reduce((max, item) => {
-    return Math.max(max, item.income, item.expense);
-  }, 0);
+  const highestValue = filteredMonthlyData.length > 0 
+    ? filteredMonthlyData.reduce((max, item) => {
+        return Math.max(max, item.income, item.expense);
+      }, 0)
+    : 0;
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
@@ -230,46 +260,52 @@ export default function ProfitLossReport() {
             <View className="mb-6">
               <Text className="text-lg font-semibold mb-4">Monthly Performance</Text>
               
-              {monthlyData.slice(0, 12).map((item, index) => (
-                <View key={item.monthYear} className="bg-white rounded-lg p-4 mb-3">
-                  <Text className="font-semibold mb-3">{getMonthName(item.monthYear)}</Text>
-                  
-                  <View className="mb-3">
-                    <View className="flex-row justify-between mb-1">
-                      <Text className="text-gray-600">Income</Text>
-                      <Text className="text-green-600">{formatCurrency(item.income)}</Text>
+              {filteredMonthlyData.length > 0 ? (
+                filteredMonthlyData.map((item, index) => (
+                  <View key={item.monthYear} className="bg-white rounded-lg p-4 mb-3">
+                    <Text className="font-semibold mb-3">{getMonthName(item.monthYear)}</Text>
+                    
+                    <View className="mb-3">
+                      <View className="flex-row justify-between mb-1">
+                        <Text className="text-gray-600">Income</Text>
+                        <Text className="text-green-600">{formatCurrency(item.income)}</Text>
+                      </View>
+                      <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <View 
+                          className="h-full bg-green-500 rounded-full" 
+                          style={{ width: `${(item.income / highestValue) * 100}%` }} 
+                        />
+                      </View>
                     </View>
-                    <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <View 
-                        className="h-full bg-green-500 rounded-full" 
-                        style={{ width: `${(item.income / highestValue) * 100}%` }} 
-                      />
+                    
+                    <View className="mb-3">
+                      <View className="flex-row justify-between mb-1">
+                        <Text className="text-gray-600">Expenses</Text>
+                        <Text className="text-red-600">{formatCurrency(item.expense)}</Text>
+                      </View>
+                      <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <View 
+                          className="h-full bg-red-500 rounded-full" 
+                          style={{ width: `${(item.expense / highestValue) * 100}%` }} 
+                        />
+                      </View>
+                    </View>
+                    
+                    <View className="h-px bg-gray-200 my-2" />
+                    
+                    <View className="flex-row justify-between">
+                      <Text className="text-gray-800 font-semibold">Profit</Text>
+                      <Text className={`font-bold ${item.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(item.profit)}
+                      </Text>
                     </View>
                   </View>
-                  
-                  <View className="mb-3">
-                    <View className="flex-row justify-between mb-1">
-                      <Text className="text-gray-600">Expenses</Text>
-                      <Text className="text-red-600">{formatCurrency(item.expense)}</Text>
-                    </View>
-                    <View className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <View 
-                        className="h-full bg-red-500 rounded-full" 
-                        style={{ width: `${(item.expense / highestValue) * 100}%` }} 
-                      />
-                    </View>
-                  </View>
-                  
-                  <View className="h-px bg-gray-200 my-2" />
-                  
-                  <View className="flex-row justify-between">
-                    <Text className="text-gray-800 font-semibold">Profit</Text>
-                    <Text className={`font-bold ${item.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(item.profit)}
-                    </Text>
-                  </View>
+                ))
+              ) : (
+                <View className="bg-white rounded-lg p-4 mb-3 items-center">
+                  <Text className="text-gray-500">No data available for this period</Text>
                 </View>
-              ))}
+              )}
             </View>
           </>
         )}

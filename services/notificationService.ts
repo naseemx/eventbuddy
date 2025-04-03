@@ -175,18 +175,77 @@ export const sendPushNotification = async ({
   data?: Record<string, any>;
 }) => {
   try {
-    await Notifications.scheduleNotificationAsync({
+    console.log('Attempting to send push notification:', { title, body });
+    
+    // Check and request permissions if needed
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      console.warn('Notification permission not granted. Requesting permissions...');
+      const { status: newStatus } = await Notifications.requestPermissionsAsync();
+      if (newStatus !== 'granted') {
+        console.error('User denied notification permissions');
+        return false;
+      }
+    }
+    
+    // Configure Android channel with high importance
+    if (Platform.OS === 'android') {
+      console.log('Setting up Android notification channel');
+      try {
+        // Create a channel with maximum importance to ensure notifications appear
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Default Channel',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+          sound: 'default', // Use default sound
+          enableVibrate: true,
+          showBadge: true,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        });
+        console.log('Android notification channel configured successfully');
+      } catch (channelError) {
+        console.error('Error configuring notification channel:', channelError);
+      }
+    }
+    
+    // Configure how notifications are handled when the app is in the foreground
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+    
+    // Schedule the notification with increased debugging
+    console.log('About to schedule notification with content:', {
+      title,
+      body,
+      data: data || {},
+    });
+    
+    // Force system notification by using proper trigger
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
         data: data || {},
+        sound: 'default',
+        priority: 'max',
+        vibrate: [0, 250, 250, 250],
+        color: '#FF231F7C',
       },
-      trigger: null, // Immediately
+      trigger: null // Schedule immediately
     });
-    console.log('Push notification sent:', title);
+    
+    console.log('Push notification scheduled with ID:', notificationId);
     return true;
   } catch (error) {
     console.error('Error sending push notification:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+    }
     return false;
   }
 };
@@ -202,11 +261,14 @@ export const checkUpcomingEvents = async (): Promise<void> => {
     const today = now.toISOString().split('T')[0];
     const twoDaysAhead = twoDaysFromNow.toISOString().split('T')[0];
     
+    console.log(`Checking for events today (${today}) and upcoming (${twoDaysAhead})`);
+    
     // Get events happening today
     const { data: todayEvents, error: todayError } = await supabase
       .from('events')
-      .select('id, title, start_date, start_time')
-      .eq('start_date', today);
+      .select('id, title, date, time, status')
+      .eq('date', today)
+      .eq('status', 'Upcoming');
     
     if (todayError) {
       console.error('Error fetching today events:', todayError);
@@ -216,8 +278,9 @@ export const checkUpcomingEvents = async (): Promise<void> => {
     // Get events happening in 2 days
     const { data: upcomingEvents, error: upcomingError } = await supabase
       .from('events')
-      .select('id, title, start_date, start_time')
-      .eq('start_date', twoDaysAhead);
+      .select('id, title, date, time, status')
+      .eq('date', twoDaysAhead)
+      .eq('status', 'Upcoming');
     
     if (upcomingError) {
       console.error('Error fetching upcoming events:', upcomingError);
@@ -244,13 +307,16 @@ export const checkUpcomingEvents = async (): Promise<void> => {
       await createNotification({
         type: 'event_today',
         title: 'Event Today',
-        message: `"${event.title}" is scheduled for today at ${event.start_time || 'scheduled time'}`,
+        message: `"${event.title}" is scheduled for today at ${event.time || 'scheduled time'}`,
         reference_id: event.id,
         sendPush: true
       });
+      
+      // Also update the event status automatically when notifications are checked
+      await updateEventStatusToEnded(event.id, event.date);
     }
     
-    // Create notifications for upcoming events (2 days from now)
+    // Create notifications for upcoming events (2 days ahead)
     for (const event of upcomingEvents || []) {
       // Check if notification already exists for this event and type (upcoming)
       const { data: existingNotifications } = await supabase
@@ -268,7 +334,7 @@ export const checkUpcomingEvents = async (): Promise<void> => {
       await createNotification({
         type: 'event_upcoming',
         title: 'Upcoming Event',
-        message: `"${event.title}" is scheduled in 2 days (${new Date(event.start_date).toLocaleDateString()})`,
+        message: `"${event.title}" is scheduled in 2 days (${event.date}) at ${event.time || 'scheduled time'}`,
         reference_id: event.id,
         sendPush: true
       });
@@ -278,51 +344,81 @@ export const checkUpcomingEvents = async (): Promise<void> => {
   }
 };
 
-// Function to check for overdue rentals
+// Helper function to update event status to "Ended" if the date has passed
+export const updateEventStatusToEnded = async (eventId: string, eventDate: string): Promise<void> => {
+  try {
+    const now = new Date();
+    const eventDateTime = new Date(eventDate);
+    
+    // If event date is today or in the past, update to "Ended"
+    if (eventDateTime <= now) {
+      // Update event status to "Ended"
+      const { error } = await supabase
+        .from('events')
+        .update({ status: 'Ended' })
+        .eq('id', eventId)
+        .eq('status', 'Upcoming');  // Only update if status is still "Upcoming"
+      
+      if (error) {
+        console.error(`Error updating event ${eventId} status to Ended:`, error);
+      } else {
+        console.log(`Successfully updated event ${eventId} status to Ended`);
+      }
+    }
+  } catch (error) {
+    console.error(`Error in updateEventStatusToEnded for event ${eventId}:`, error);
+  }
+};
+
+// Function to check for overdue rentals and create notifications
 export const checkOverdueRentals = async (): Promise<void> => {
   try {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     
-    // Get orders/rentals that are overdue
-    const { data: overdueOrders, error: ordersError } = await supabase
-      .from('orders')
-      .select('id, order_number, customer_name, return_date')
-      .eq('status', 'active')
-      .lt('return_date', today)
-      .eq('type', 'rental'); // Assuming there's a type field to distinguish rentals
+    console.log(`Checking for overdue rentals as of ${today}`);
     
-    if (ordersError) {
-      console.error('Error fetching overdue rentals:', ordersError);
+    // Get all active rental orders where return date has passed
+    const { data: overdueRentals, error } = await supabase
+      .from('orders')
+      .select('id, order_number, customer_id, return_date, products:order_items(product_id, product:products(name))')
+      .eq('type', 'rental')  // Only rental orders
+      .eq('status', 'active')  // Only active rentals
+      .lt('return_date', today);  // Return date is less than today
+    
+    if (error) {
+      console.error('Error fetching overdue rentals:', error);
       return;
     }
     
-    console.log(`Found ${overdueOrders?.length || 0} overdue rentals`);
+    console.log(`Found ${overdueRentals?.length || 0} overdue rentals`);
     
     // Create notifications for overdue rentals
-    for (const order of overdueOrders || []) {
-      // Calculate days overdue
-      const returnDate = new Date(order.return_date);
-      const daysOverdue = Math.floor((now.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Check if notification already exists for this rental today
+    for (const rental of overdueRentals || []) {
+      // Check if notification already exists for this rental
       const { data: existingNotifications } = await supabase
         .from(TABLE_NAME)
         .select('id')
         .eq('type', 'rental_overdue')
-        .eq('reference_id', order.id)
+        .eq('reference_id', rental.id)
         .gte('created_at', now.toISOString().split('T')[0] + 'T00:00:00');
       
       if (existingNotifications && existingNotifications.length > 0) {
-        console.log(`Overdue notification already exists for rental ${order.id}`);
+        console.log(`Overdue notification already exists for rental ${rental.id}`);
         continue;
       }
       
+      // Get product names for the message
+      const productNames = rental.products
+        ?.map((item: any) => item.product?.name || 'Unknown Product')
+        .filter(Boolean)
+        .join(', ');
+      
       await createNotification({
         type: 'rental_overdue',
-        title: 'Overdue Rental',
-        message: `Rental #${order.order_number} for ${order.customer_name} is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue`,
-        reference_id: order.id,
+        title: `Overdue Rental: #${rental.order_number}`,
+        message: `Rental items (${productNames}) were due to be returned on ${rental.return_date}. Please contact the customer.`,
+        reference_id: rental.id,
         sendPush: true
       });
     }
@@ -331,10 +427,54 @@ export const checkOverdueRentals = async (): Promise<void> => {
   }
 };
 
-// Function to check and create all notifications (to be called daily or on app start)
+// Function to check all notification types
 export const checkAllNotifications = async (): Promise<void> => {
+  try {
+    console.log('Checking all notification types...');
+    
+    // Update event statuses for all upcoming events that should be marked as ended
+    await updateAllEventStatuses();
+    
+    // Check for upcoming events and create notifications
   await checkUpcomingEvents();
+    
+    // Check for overdue rentals and create notifications
   await checkOverdueRentals();
+    
+    console.log('All notification checks completed');
+  } catch (error) {
+    console.error('Error in checkAllNotifications:', error);
+  }
+};
+
+// Function to update all event statuses that have passed their event date
+export const updateAllEventStatuses = async (): Promise<void> => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    console.log(`Updating statuses for all events that have ended (before or on ${today})`);
+    
+    // Get all upcoming events with dates in the past or today
+    const { data: pastEvents, error } = await supabase
+      .from('events')
+      .select('id, title, date')
+      .eq('status', 'Upcoming')
+      .lte('date', today);
+    
+    if (error) {
+      console.error('Error fetching past events:', error);
+      return;
+    }
+    
+    console.log(`Found ${pastEvents?.length || 0} past events to update to 'Ended' status`);
+    
+    // Update each event to "Ended"
+    for (const event of pastEvents || []) {
+      await updateEventStatusToEnded(event.id, event.date);
+    }
+  } catch (error) {
+    console.error('Error updating all event statuses:', error);
+  }
 };
 
 // Function to delete a notification
@@ -440,5 +580,50 @@ export const seedTestNotifications = async (): Promise<boolean> => {
   } catch (error) {
     console.error('Error in seedTestNotifications:', error);
     return false;
+  }
+};
+
+// Send a test notification - for testing push notifications
+export const sendTestNotification = async (): Promise<boolean> => {
+  try {
+    const timestamp = new Date().toLocaleTimeString();
+    
+    // First, create the notification in the database
+    const notificationData = {
+      type: 'test_notification',
+      title: 'Test Notification',
+      message: `This is a test notification sent at ${timestamp}. If you can see this, notifications are working properly!`,
+      sendPush: true  // This will trigger the push notification
+    };
+    
+    // Create in database and send push
+    await createNotification(notificationData);
+    
+    console.log('Test notification created and push sent');
+    return true;
+  } catch (error) {
+    console.error('Error sending test notification:', error);
+    return false;
+  }
+};
+
+// Function to count unread notifications for header badge
+export const getUnreadNotificationCount = async (): Promise<number> => {
+  try {
+    // Fetch count of unread notifications
+    const { count, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*', { count: 'exact', head: true })
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Error counting unread notifications:', error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error in getUnreadNotificationCount:', error);
+    return 0;
   }
 };

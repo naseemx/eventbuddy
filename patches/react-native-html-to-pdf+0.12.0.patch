@@ -1,0 +1,29 @@
+diff --git a/node_modules/react-native-html-to-pdf/android/build.gradle b/node_modules/react-native-html-to-pdf/android/build.gradle
+index 996ad11..f89d778 100644
+--- a/node_modules/react-native-html-to-pdf/android/build.gradle
++++ b/node_modules/react-native-html-to-pdf/android/build.gradle
+@@ -1,4 +1,3 @@
+-
+ buildscript {
+     repositories {
+         google()
+@@ -19,15 +18,15 @@ def safeExtGet(prop, fallback) {
+ apply plugin: 'com.android.library'
+ 
+ android {
+-     compileSdkVersion safeExtGet('compileSdkVersion', 28)
++     compileSdkVersion safeExtGet('compileSdkVersion', 33)
+      compileOptions {
+-        sourceCompatibility JavaVersion.VERSION_1_8
+-        targetCompatibility JavaVersion.VERSION_1_8
++        sourceCompatibility JavaVersion.VERSION_11
++        targetCompatibility JavaVersion.VERSION_11
+     }
+ 
+     defaultConfig {
+         minSdkVersion safeExtGet('minSdkVersion', 16)
+-        targetSdkVersion safeExtGet('targetSdkVersion', 28)
++        targetSdkVersion safeExtGet('targetSdkVersion', 33)
+         versionCode 1
+         versionName "1.0"
+         ndk {

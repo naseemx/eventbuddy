@@ -154,7 +154,9 @@ export const createOrderTransaction = async (
       amount,
       type: 'income' as const,
       category: orderType === 'rental' ? 'rental_payment' : 'sales_revenue',
-      description: `Payment received for ${orderType} order #${orderId.substring(0, 8)}`,
+      description: orderType === 'rental' 
+        ? `Rental Order Payment`
+        : `Payment received for ${orderType} order #${orderId.substring(0, 8)}`,
       reference_id: orderId,
       reference_type: 'order' as const,
       payment_method: paymentMethod,

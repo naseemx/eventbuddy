@@ -79,45 +79,57 @@ export const uploadProductImages = async (
 };
 
 /**
- * Delete all images in a product folder
+ * Delete all product images from storage
  * 
- * @param productId The product ID whose images should be deleted
- * @returns Promise<boolean> indicating success
+ * @param productId The product ID to delete images for
+ * @param excludeFiles Optional array of filenames to exclude from deletion
+ * @returns True if deletion was successful
  */
-export const deleteProductImages = async (productId: string): Promise<boolean> => {
+export const deleteProductImages = async (
+  productId: string,
+  excludeFiles: string[] = []
+): Promise<boolean> => {
   try {
-    console.log(`Deleting all images for product ${productId}`);
+    console.log(`Deleting all images for product ${productId}${excludeFiles.length > 0 ? ' except ' + excludeFiles.length + ' files' : ''}`);
     
-    // First list all files in the product folder
-    const { data: fileList, error: listError } = await supabase.storage
+    // List all files in the product folder
+    const { data, error } = await supabase.storage
       .from(PRODUCT_IMAGES_BUCKET)
       .list(productId);
     
-    if (listError) {
-      console.error(`Error listing files for product ${productId}:`, listError);
+    if (error) {
+      console.error(`Error listing images for product ${productId}:`, error);
       return false;
     }
     
-    if (!fileList || fileList.length === 0) {
+    if (!data || data.length === 0) {
       console.log(`No images found for product ${productId}`);
+      return true; // Nothing to delete
+    }
+    
+    // Extract filenames only
+    const filesToDelete = data
+      .map(item => `${productId}/${item.name}`)
+      .filter(path => !excludeFiles.includes(path));
+    
+    console.log(`Found ${filesToDelete.length} images to delete: ${JSON.stringify(filesToDelete)}`);
+    
+    if (filesToDelete.length === 0) {
+      console.log(`No images to delete after applying exclusions`);
       return true;
     }
     
-    // Create an array of paths to delete
-    const filePaths = fileList.map(file => `${productId}/${file.name}`);
-    console.log(`Found ${filePaths.length} images to delete:`, filePaths);
-    
-    // Delete all files in the folder
+    // Delete the files
     const { error: deleteError } = await supabase.storage
       .from(PRODUCT_IMAGES_BUCKET)
-      .remove(filePaths);
+      .remove(filesToDelete);
     
     if (deleteError) {
       console.error(`Error deleting images for product ${productId}:`, deleteError);
       return false;
     }
     
-    console.log(`Successfully deleted ${filePaths.length} images for product ${productId}`);
+    console.log(`Successfully deleted ${filesToDelete.length} images for product ${productId}`);
     return true;
   } catch (error) {
     console.error(`Error in deleteProductImages for ${productId}:`, error);
@@ -141,42 +153,80 @@ export const updateProductImages = async (
   try {
     console.log(`Updating images for product ${productId}, ${images.length} images, shouldDeleteOld: ${shouldDeleteOld}`);
     
-    // Filter out empty images
-    const validImages = images.filter(img => {
+    // Separate remote URLs and images that need uploading
+    const remoteUrls: string[] = [];
+    const imagesToUpload: string[] = [];
+    
+    // Filter and categorize images
+    images.forEach(img => {
       if (!img) {
         console.warn("Empty image found, skipping");
-        return false;
+        return;
       }
       
+      // If it's already a remote URL from our storage system, keep it as is
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        // Check if it's from our storage system
+        if (img.includes('/storage/v1/object/public/product-images/')) {
+          console.log("Found existing remote URL, preserving it");
+          remoteUrls.push(img);
+          return;
+        }
+      }
+      
+      // If it's a data URL, verify it has valid base64 data
       if (img.startsWith('data:')) {
         const base64Match = img.match(/base64,(.+)/);
         if (!base64Match || !base64Match[1] || base64Match[1].trim().length === 0) {
           console.warn("Image has empty base64 data, skipping");
-          return false;
+          return;
         }
+        imagesToUpload.push(img);
+        return;
       }
       
-      return true;
+      // For any other type of valid URL, add it to upload
+      imagesToUpload.push(img);
     });
     
-    console.log(`Found ${validImages.length} valid images out of ${images.length}`);
+    console.log(`Found ${remoteUrls.length} existing URLs to preserve and ${imagesToUpload.length} images to upload`);
     
-    if (validImages.length === 0) {
-      console.warn("No valid images to upload");
-      return [];
+    // If everything is already a remote URL and there's nothing to upload, just return the URLs
+    if (imagesToUpload.length === 0 && remoteUrls.length > 0) {
+      console.log("No new images to upload, using existing URLs");
+      return remoteUrls;
     }
     
-    // Delete old images if requested
-    if (shouldDeleteOld) {
+    // Delete old images only if we're uploading new ones
+    if (shouldDeleteOld && imagesToUpload.length > 0) {
       console.log(`Deleting old images for product ${productId}`);
-      const deleteResult = await deleteProductImages(productId);
+      
+      // Extract filenames from remote URLs we want to preserve
+      const preserveFilenames = remoteUrls.map(url => {
+        // Extract the filename from the URL
+        const matches = url.match(/\/product-images\/([^?]+)/);
+        return matches ? matches[1] : '';
+      }).filter(filename => filename);
+      
+      console.log(`Preserving ${preserveFilenames.length} existing images: ${JSON.stringify(preserveFilenames)}`);
+      
+      const deleteResult = await deleteProductImages(productId, preserveFilenames);
       if (!deleteResult) {
         console.warn(`Failed to delete old images for product ${productId}, but continuing with upload`);
       }
     }
     
-    // Upload new images
-    return await uploadProductImages(productId, validImages);
+    // If we have images to upload, do so
+    let uploadedUrls: string[] = [];
+    if (imagesToUpload.length > 0) {
+      uploadedUrls = await uploadProductImages(productId, imagesToUpload);
+    }
+    
+    // Combine preserved remote URLs with newly uploaded ones
+    const allUrls = [...remoteUrls, ...uploadedUrls];
+    console.log(`Final image URLs count: ${allUrls.length}`);
+    
+    return allUrls;
   } catch (error) {
     console.error(`Error updating images for product ${productId}:`, error);
     return [];

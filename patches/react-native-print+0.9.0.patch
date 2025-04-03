@@ -1,0 +1,31 @@
+diff --git a/node_modules/react-native-print/android/build.gradle b/node_modules/react-native-print/android/build.gradle
+index f5b259d..ad004a9 100644
+--- a/node_modules/react-native-print/android/build.gradle
++++ b/node_modules/react-native-print/android/build.gradle
+@@ -1,18 +1,23 @@
+ apply plugin: 'com.android.library'
+ 
+ android {
+-    compileSdkVersion 29
+-    buildToolsVersion "28.0.3"
++    compileSdkVersion 33
++    buildToolsVersion "33.0.2"
+ 
+     defaultConfig {
+         minSdkVersion 16
+-        targetSdkVersion 29
++        targetSdkVersion 33
+         versionCode 1
+         versionName "1.0"
+         ndk {
+             abiFilters "armeabi-v7a", "x86"
+         }
+     }
++    
++    compileOptions {
++        sourceCompatibility JavaVersion.VERSION_11
++        targetCompatibility JavaVersion.VERSION_11
++    }
+ }
+ 
+ dependencies {

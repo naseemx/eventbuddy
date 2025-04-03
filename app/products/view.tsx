@@ -32,6 +32,8 @@ import { getProductById, updateProduct } from "../../services/productService";
 import { supabase } from "../../lib/supabase";
 import { debugImageData } from "../../utils/imageUtils";
 import SafeImage from "../../components/SafeImage";
+import OptimizedImage from "../../components/OptimizedImage";
+import LazyImageCarousel from "../../components/LazyImageCarousel";
 
 import Header from "../../components/Header";
 import Notification from "../../components/Notification";
@@ -187,7 +189,8 @@ export default function ProductViewScreen() {
         `)
         .ilike('items', `%${id}%`)
         .eq('order_type', 'rental')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(3); // Limit to 3 most recent rentals
       
       if (error) {
         console.error("Error fetching rental history:", error);
@@ -322,7 +325,7 @@ export default function ProductViewScreen() {
     });
   };
 
-  // Replace the rental history section with this enhanced version
+  // Replace the rental history section with this improved version
   const renderRentalHistory = () => {
     if (isRentalHistoryLoading) {
       return (
@@ -348,82 +351,44 @@ export default function ProductViewScreen() {
           // Format dates for display
           const startDate = rental.start_date ? formatDate(rental.start_date) : 'N/A';
           const endDate = rental.end_date ? formatDate(rental.end_date) : 'N/A';
-          const returnDate = rental.return_date ? formatDate(rental.return_date) : 'Not returned';
-          
-          // Determine status color
-          let statusColor = 'bg-gray-100 text-gray-800';
-          if (rental.status === 'Active') statusColor = 'bg-green-100 text-green-800';
-          else if (rental.status === 'Returned') statusColor = 'bg-blue-100 text-blue-800';
-          else if (rental.status === 'Overdue') statusColor = 'bg-red-100 text-red-800';
-          
-          // Determine payment status color
-          let paymentStatusColor = 'bg-gray-100 text-gray-800';
-          if (rental.payment_status === 'Paid') paymentStatusColor = 'bg-green-100 text-green-800';
-          else if (rental.payment_status === 'Unpaid') paymentStatusColor = 'bg-red-100 text-red-800';
           
           return (
-            <View key={rental.id} className="mb-4 bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-              {/* Customer Info */}
+            <TouchableOpacity
+              key={rental.id}
+              className="mb-3 bg-white rounded-lg p-4 shadow-sm border border-gray-100"
+              onPress={() => router.push(`/orders/view?id=${rental.id}`)}
+              activeOpacity={0.7}
+            >
               <View className="flex-row items-center mb-2">
-                <User size={16} color="#6B7280" />
-                <Text className="ml-2 font-medium text-gray-900">{rental.customer_name}</Text>
-                <TouchableOpacity 
-                  className="ml-auto"
-                  onPress={() => router.push(`/orders/view?id=${rental.id}`)}
-                >
-                  <View className="flex-row items-center">
-                    <Text className="text-blue-600 text-sm mr-1">View Order</Text>
-                    <ChevronRight size={16} color="#2563EB" />
+                <User size={16} color="#6B7280" className="mr-2" />
+                <Text className="font-medium text-gray-900 flex-1" numberOfLines={1} ellipsizeMode="tail">
+                  {rental.customer_name}
+                </Text>
+                <View className={`px-2 py-1 rounded-full ${
+                  rental.status === 'Active' ? 'bg-green-100 text-green-800' : 
+                  rental.status === 'Returned' ? 'bg-blue-100 text-blue-800' : 
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  <Text className="text-xs font-medium">{rental.status}</Text>
                   </View>
-                </TouchableOpacity>
               </View>
               
-              {/* Contact Info */}
-              {rental.customer_phone && (
-                <View className="flex-row items-center mb-2">
-                  <Text className="text-gray-700 font-medium w-1/4">Phone:</Text>
-                  <Text className="text-gray-800">{rental.customer_phone}</Text>
-                </View>
-              )}
-              
-              {rental.customer_email && (
-                <View className="flex-row items-center mb-2">
-                  <Text className="text-gray-700 font-medium w-1/4">Email:</Text>
-                  <Text className="text-gray-800">{rental.customer_email}</Text>
-                </View>
-              )}
-              
-              {/* Rental Period */}
-              <View className="flex-row items-center mb-2">
-                <Calendar size={16} color="#6B7280" />
-                <Text className="ml-2 text-gray-600">
-                  {startDate} to {endDate}
+              <View className="flex-row items-center mb-1">
+                <Calendar size={14} color="#6B7280" className="mr-2" />
+                <Text className="text-gray-700 text-sm">
+                  {startDate} - {endDate}
                 </Text>
               </View>
               
-              {/* Return Date (if applicable) */}
-              {rental.status === 'Returned' && (
-                <View className="flex-row items-center mb-2">
-                  <Clock size={16} color="#6B7280" />
-                  <Text className="ml-2 text-gray-600">
-                    Returned on: {returnDate}
+              <View className="flex-row justify-between items-center mt-2">
+                <View className="flex-row items-center">
+                  <Text className="text-xs text-gray-500">
+                    {new Date(rental.created_at).toLocaleDateString()}
                   </Text>
                 </View>
-              )}
-              
-              {/* Status & Payment */}
-              <View className="flex-row justify-between mt-2">
-                <View className="flex-row space-x-2">
-                  <View className={`px-2 py-1 rounded-full ${statusColor}`}>
-                    <Text className="text-xs font-medium">{rental.status}</Text>
-                  </View>
-                  <View className={`px-2 py-1 rounded-full ${paymentStatusColor}`}>
-                    <Text className="text-xs font-medium">{rental.payment_status || 'Unknown'}</Text>
-                  </View>
-                </View>
-                <Text className="font-semibold">₹{rental.total_amount.toFixed(2)}</Text>
+                <ChevronRight size={16} color="#9ca3af" />
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -500,40 +465,13 @@ export default function ProductViewScreen() {
           {/* Product Image Carousel */}
           <View className="bg-white rounded-xl shadow-sm mb-5 overflow-hidden">
             {images.length > 0 ? (
-              <View className="relative">
-                <SafeImage
-                  source={images[currentImageIndex]?.base64 || images[currentImageIndex]?.uri}
-                  style={{ width: '100%', height: 256 }}
+              <LazyImageCarousel
+                images={images}
+                height={256}
+                showIndicators={true}
+                onImageChange={(index) => setCurrentImageIndex(index)}
                   resizeMode="cover"
                 />
-                
-                {images.length > 1 && (
-                  <>
-                    <TouchableOpacity 
-                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 p-2 rounded-full"
-                      onPress={prevImage}
-                    >
-                      <ChevronLeft size={24} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 p-2 rounded-full"
-                      onPress={nextImage}
-                    >
-                      <ChevronRight size={24} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    
-                    <View className="absolute bottom-2 left-0 right-0 flex-row justify-center">
-                      {images.map((_, index) => (
-                        <View 
-                          key={index} 
-                          className={`h-2 w-2 rounded-full mx-1 ${currentImageIndex === index ? 'bg-white' : 'bg-white/50'}`} 
-                        />
-                      ))}
-                    </View>
-                  </>
-                )}
-              </View>
             ) : (
               <View className="w-full h-64 bg-gray-200 items-center justify-center">
                 <Package size={64} color="#9CA3AF" />
@@ -600,7 +538,7 @@ export default function ProductViewScreen() {
           <View className="flex-row justify-between mb-5">
             {(product.status === "Available" && isForRent) && (
               <TouchableOpacity
-                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 py-3 rounded-xl flex-row items-center justify-center mr-2 shadow-md"
+                className="flex-1 bg-blue-500 py-3 rounded-lg flex-row items-center justify-center mr-2"
                 onPress={handleRentProduct}
               >
                 <ShoppingCart size={20} color="#FFFFFF" />
@@ -610,17 +548,18 @@ export default function ProductViewScreen() {
             
             {(product.status === "Available" && isForSale) && (
               <TouchableOpacity
-                className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 py-3 rounded-xl flex-row items-center justify-center mr-2 shadow-md"
+                className="flex-1 bg-green-500 py-3 rounded-lg flex-row items-center justify-center mr-2"
                 onPress={handleSellProduct}
               >
                 <ShoppingBag size={20} color="#FFFFFF" />
-                <Text className="text-white font-medium ml-2">Sell Now</Text>
+                <Text className="text-white font-medium ml-2">Buy Now</Text>
               </TouchableOpacity>
             )}
             
             <TouchableOpacity
-              className="flex-1 bg-amber-500 py-3 rounded-xl flex-row items-center justify-center shadow-md"
+              className="flex-1 bg-amber-500 py-3 rounded-lg flex-row items-center justify-center"
               onPress={() => handleOpenStatusModal()}
+              activeOpacity={0.7}
             >
               <Clock size={20} color="#FFFFFF" />
               <Text className="text-white font-medium ml-2">Change Status</Text>

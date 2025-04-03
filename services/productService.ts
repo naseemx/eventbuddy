@@ -96,6 +96,18 @@ export const getProductById = async (id: string): Promise<Product | null> => {
     
     if (error) throw error;
     
+    // Debug the product data
+    console.log(`Product data for ${id}:`, {
+      name: data.name,
+      has_primary_image: !!data.primary_image_url,
+      primary_image_sample: data.primary_image_url ? data.primary_image_url.substring(0, 50) + '...' : null,
+      has_image_urls: !!data.image_urls,
+      image_urls_type: data.image_urls ? typeof data.image_urls : null,
+      image_urls_sample: data.image_urls && Array.isArray(data.image_urls) && data.image_urls.length > 0 
+        ? String(data.image_urls[0]).substring(0, 50) + '...' 
+        : null
+    });
+    
     return data;
   } catch (error) {
     console.error(`Error fetching product with ID ${id}:`, error);

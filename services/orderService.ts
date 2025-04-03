@@ -762,4 +762,41 @@ export const updateInvoice = async (id: string, updates: Partial<Invoice>): Prom
     console.error(`Error updating invoice with ID ${id}:`, error);
     return null;
   }
+};
+
+// Function to count active orders for the header notification
+export const getActiveOrdersCount = async (): Promise<number> => {
+  try {
+    const { count, error } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'Active');
+    
+    if (error) {
+      console.error('Error counting active orders:', error);
+      return 0;
+    }
+    
+    return count || 0;
+  } catch (error) {
+    console.error('Error in getActiveOrdersCount:', error);
+    return 0;
+  }
+};
+
+// Default export
+export default {
+  getOrders,
+  getOrderById,
+  createOrder,
+  updateOrder,
+  markRentalAsReturned,
+  cancelOrder,
+  generateInvoice,
+  getInvoices,
+  getInvoiceById,
+  updateInvoiceStatus,
+  syncInvoicesWithOrders,
+  updateInvoice,
+  getActiveOrdersCount
 }; 

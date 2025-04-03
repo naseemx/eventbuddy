@@ -101,6 +101,14 @@ export default function AddOrderScreen() {
   const [orderType, setOrderType] = useState<"rental" | "sale">(params.type as "rental" | "sale" || "rental");
   const [includeSoldProducts, setIncludeSoldProducts] = useState(false);
 
+  // Add format date function
+  const formatDate = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString().substr(2, 2);
+    return `${day}/${month}/${year}`;
+  };
+
   // Load available products and preselect product if productId is provided
   useEffect(() => {
     const loadProducts = async () => {
@@ -578,7 +586,7 @@ export default function AddOrderScreen() {
                             >
                               <Calendar size={16} color="#666" />
                               <Text className="ml-2">
-                                {startDate.toISOString().split('T')[0]}
+                                {formatDate(startDate)}
                               </Text>
                             </TouchableOpacity>
                             
@@ -588,7 +596,7 @@ export default function AddOrderScreen() {
                             >
                               <Calendar size={16} color="#666" />
                               <Text className="ml-2">
-                                {endDate.toISOString().split('T')[0]}
+                                {formatDate(endDate)}
                               </Text>
                             </TouchableOpacity>
                           </View>
@@ -662,7 +670,7 @@ export default function AddOrderScreen() {
                               >
                                 <Calendar size={16} color="#666" />
                                 <Text className="ml-2">
-                                  {product.startDate || "Start Date"}
+                                  {product.startDate ? formatDate(new Date(product.startDate)) : "Select start date"}
                                 </Text>
                               </TouchableOpacity>
                               
@@ -671,7 +679,7 @@ export default function AddOrderScreen() {
                               >
                                 <Calendar size={16} color="#666" />
                                 <Text className="ml-2">
-                                  {product.endDate || "End Date"}
+                                  {product.endDate ? formatDate(new Date(product.endDate)) : "Select end date"}
                                 </Text>
                               </TouchableOpacity>
                             </View>

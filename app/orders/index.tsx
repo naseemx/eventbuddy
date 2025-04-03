@@ -229,16 +229,17 @@ export default function OrdersScreen() {
       <TouchableOpacity
         className="bg-white p-4 rounded-lg mb-3 shadow-sm border border-gray-100"
         onPress={() => router.push(`/orders/view?id=${item.id}`)}
+        hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
       >
         <View className="flex-row justify-between items-start">
-          <View className="flex-1">
+          <View className="flex-1 mr-2">
             <View className="flex-row items-center mb-1">
               <User size={14} color="#6B7280" />
-              <Text className="font-semibold text-gray-900 ml-1">
+              <Text className="font-semibold text-gray-900 ml-1" numberOfLines={1} ellipsizeMode="tail">
                 {item.customer_name}
               </Text>
             </View>
-            <Text className="text-gray-600 text-sm mb-1">
+            <Text className="text-gray-600 text-sm mb-1" numberOfLines={1} ellipsizeMode="tail">
               {orderItems.length > 0
                 ? orderItems.length > 1
                   ? `${orderItems[0].product_name} +${orderItems.length - 1} more`
