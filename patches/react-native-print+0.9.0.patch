@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-print/android/build.gradle b/node_modules/react-native-print/android/build.gradle
-index f5b259d..ad004a9 100644
+index f5b259d..e80066a 100644
 --- a/node_modules/react-native-print/android/build.gradle
 +++ b/node_modules/react-native-print/android/build.gradle
 @@ -1,18 +1,23 @@
@@ -14,7 +14,7 @@ index f5b259d..ad004a9 100644
      defaultConfig {
          minSdkVersion 16
 -        targetSdkVersion 29
-+        targetSdkVersion 33
++        targetSdkVersion 34
          versionCode 1
          versionName "1.0"
          ndk {
@@ -23,8 +23,8 @@ index f5b259d..ad004a9 100644
      }
 +    
 +    compileOptions {
-+        sourceCompatibility JavaVersion.VERSION_11
-+        targetCompatibility JavaVersion.VERSION_11
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
 +    }
  }
  

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -27,8 +27,8 @@ import {
   Check,
   XCircle,
 } from "lucide-react-native";
-import RNHTMLtoPDF from 'react-native-html-to-pdf';
-import RNPrint from 'react-native-print';
+import * as RNHTMLtoPDF from 'react-native-html-to-pdf';
+import * as RNPrint from 'react-native-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
@@ -36,16 +36,26 @@ import { WebView } from 'react-native-webview';
 
 import Header from "../../components/Header";
 import { getInvoiceById } from "../../services/orderService";
-import { Invoice } from "../../types";
+import { Invoice, InvoiceItem } from "../../types";
 import { useCompany } from "../../services/companyContext";
 import { canGeneratePdf, ensureDocumentDirectoryExists } from "../../services/permissionService";
 
 // PDF Generation status types
 type PdfStatus = 'idle' | 'generating' | 'preview' | 'success' | 'error';
 // PDF Action types
-type PdfAction = 'download' | 'print' | 'send';
+type PdfAction = 'download' | 'print' | 'send' | 'preview';
 
-export default function InvoiceDetailsScreen() {
+// HTML escape utility
+const escapeHtml = (unsafe: string): string => {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+function InvoiceDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { id, refresh } = useLocalSearchParams<{ id: string, refresh?: string }>();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -63,18 +73,28 @@ export default function InvoiceDetailsScreen() {
   // Get company information from context
   const { companyData, loading: companyLoading } = useCompany();
 
+  // Cleanup function for temporary files
+  const cleanupTempFiles = async () => {
+    if (pdfPath) {
+      try {
+        await FileSystem.deleteAsync(pdfPath, { idempotent: true });
+      } catch (error) {
+        console.error('Error cleaning up temp files:', error);
+      }
+    }
+  };
+
   // Effect to handle refresh parameter
   useEffect(() => {
     if (refresh === 'true') {
-      // Trigger a refresh by updating the refreshKey
       setRefreshKey(prev => prev + 1);
-      
-      // Clear the refresh parameter from the URL to prevent infinite refreshes
       router.setParams({ refresh: undefined });
     }
   }, [refresh]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchInvoiceDetails = async () => {
       if (!id) {
         setError("Invoice ID is missing");
@@ -85,35 +105,47 @@ export default function InvoiceDetailsScreen() {
       try {
         setIsLoading(true);
         const data = await getInvoiceById(id);
+        if (isMounted) {
         if (data) {
           setInvoice(data);
           setError(null);
         } else {
           setError("Invoice not found");
+          }
         }
       } catch (err) {
         console.error("Error fetching invoice:", err);
-        setError("Failed to load invoice details");
+        if (isMounted) {
+          const errorMessage = err instanceof Error ? err.message : "Failed to load invoice details";
+          setError(errorMessage);
+        }
       } finally {
+        if (isMounted) {
         setIsLoading(false);
+        }
       }
     };
 
     fetchInvoiceDetails();
+
+    return () => {
+      isMounted = false;
+      cleanupTempFiles();
+    };
   }, [id, refreshKey]);
 
   const handleEditInvoice = () => {
     router.push(`/finances/edit-invoice?id=${id}`);
   };
 
-  // Generate PDF HTML content
-  const generatePdfHtml = () => {
+  // Generate PDF HTML content with memoization
+  const generatePdfHtml = useMemo(() => {
     if (!invoice) return '';
     
     // Parse items if it's a string
-    const invoiceItems = typeof invoice.items === 'string' 
+    const invoiceItems: InvoiceItem[] = typeof invoice.items === 'string' 
       ? JSON.parse(invoice.items) 
-      : invoice.items || [];
+      : Array.isArray(invoice.items) ? invoice.items : [];
     
     // Status color
     const getStatusBadgeColor = (status: string) => {
@@ -124,24 +156,23 @@ export default function InvoiceDetailsScreen() {
       return '#6B7280';
     };
     
-    // Create items rows HTML
-    const itemsRowsHtml = invoiceItems.map((item: any, index: number) => `
+    // Create items rows HTML with escaped values
+    const itemsRowsHtml = invoiceItems.map((item: InvoiceItem, index: number) => `
       <tr style="border-bottom: 1px solid #E5E7EB;">
         <td style="padding: 12px 8px;">${index + 1}</td>
-        <td style="padding: 12px 8px;">${item.description || item.name}</td>
+        <td style="padding: 12px 8px;">${escapeHtml(item.description || item.name || '')}</td>
         <td style="padding: 12px 8px; text-align: center;">${item.quantity}</td>
-        <td style="padding: 12px 8px; text-align: right;">₹${(item.unit_price || item.unitPrice).toLocaleString()}</td>
-        <td style="padding: 12px 8px; text-align: right;">₹${Number(item.total || (item.quantity * (item.unit_price || item.unitPrice))).toLocaleString()}</td>
+        <td style="padding: 12px 8px; text-align: right;">₹${(item.unit_price || item.unitPrice || 0).toLocaleString()}</td>
+        <td style="padding: 12px 8px; text-align: right;">₹${Number(item.total || (item.quantity * (item.unit_price || item.unitPrice || 0))).toLocaleString()}</td>
       </tr>
     `).join('');
     
-    // Create HTML content
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <title>Invoice ${invoice.invoice_number}</title>
+        <title>Invoice ${escapeHtml(invoice.invoice_number)}</title>
         <style>
           body {
             font-family: 'Helvetica', 'Arial', sans-serif;
@@ -192,151 +223,33 @@ export default function InvoiceDetailsScreen() {
             background-color: ${getStatusBadgeColor(invoice.status)};
             font-size: 12px;
           }
-          .section {
-            margin-bottom: 30px;
-          }
-          .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: #111827;
-            border-bottom: 1px solid #E5E7EB;
-            padding-bottom: 8px;
-            margin-bottom: 15px;
-          }
-          .grid {
-            display: flex;
-            justify-content: space-between;
-          }
-          .col {
-            flex: 1;
-          }
-          .info-group {
-            margin-bottom: 15px;
-          }
-          .info-label {
-            font-weight: bold;
-            margin-bottom: 3px;
-            color: #6B7280;
-          }
-          .info-value {
-            color: #111827;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          th {
-            background-color: #F3F4F6;
-            padding: 12px 8px;
-            text-align: left;
-            font-weight: bold;
-            color: #374151;
-          }
-          .text-right {
-            text-align: right;
-          }
-          .text-center {
-            text-align: center;
-          }
-          .summary {
-            width: 50%;
-            margin-left: auto;
-          }
-          .summary-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-          }
-          .summary-row.total {
-            font-weight: bold;
-            font-size: 16px;
-            border-top: 2px solid #E5E7EB;
-            padding-top: 12px;
-          }
-          .footer {
-            margin-top: 50px;
-            text-align: center;
-            color: #6B7280;
-            font-size: 11px;
-            padding-top: 15px;
-            border-top: 1px solid #E5E7EB;
-          }
-          .notes {
-            margin-top: 30px;
-            border-top: 1px dashed #E5E7EB;
-            padding-top: 15px;
-          }
-          .notes-title {
-            font-weight: bold;
-            margin-bottom: 8px;
-          }
         </style>
       </head>
       <body>
         <div class="page">
-          <!-- Header -->
           <div class="header">
             <div class="company-info">
-              <div class="company-name">${companyData?.name || 'Company Name'}</div>
-              <div>${companyData?.address || ''}</div>
-              ${companyData?.phone ? `<div>Phone: ${companyData.phone}</div>` : ''}
-              ${companyData?.email ? `<div>Email: ${companyData.email}</div>` : ''}
-              ${companyData?.website ? `<div>Web: ${companyData.website}</div>` : ''}
-              ${companyData?.taxId ? `<div>Tax ID: ${companyData.taxId}</div>` : ''}
+              <div class="company-name">${escapeHtml(companyData?.name || '')}</div>
+              <div>${escapeHtml(companyData?.address || '')}</div>
+              <div>Phone: ${escapeHtml(companyData?.phone || '')}</div>
+              <div>Email: ${escapeHtml(companyData?.email || '')}</div>
             </div>
             <div>
               <div class="invoice-title">INVOICE</div>
-              <div class="invoice-number">#${invoice.invoice_number}</div>
-              <div style="text-align: right; margin-top: 10px;">
-                <span class="status-badge">${invoice.status}</span>
-              </div>
+              <div class="invoice-number">#${escapeHtml(invoice.invoice_number)}</div>
+              <div class="status-badge">${escapeHtml(invoice.status)}</div>
             </div>
           </div>
           
-          <!-- Info Section -->
-          <div class="section grid">
-            <div class="col">
-              <div class="section-title">Bill To</div>
-              <div class="info-group">
-                <div class="info-value">${invoice.customer_name}</div>
-                ${invoice.customer_email ? `<div class="info-value">${invoice.customer_email}</div>` : ''}
-                ${invoice.customer_phone ? `<div class="info-value">${invoice.customer_phone}</div>` : ''}
-              </div>
-            </div>
-            <div class="col">
-              <div class="section-title">Invoice Details</div>
-              <div class="info-group">
-                <div class="info-label">Invoice Number:</div>
-                <div class="info-value">${invoice.invoice_number}</div>
-              </div>
-              <div class="info-group">
-                <div class="info-label">Invoice Date:</div>
-                <div class="info-value">${invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : 'N/A'}</div>
-              </div>
-              <div class="info-group">
-                <div class="info-label">Due Date:</div>
-                <div class="info-value">${invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : 'N/A'}</div>
-              </div>
-              ${invoice.order_id ? `
-              <div class="info-group">
-                <div class="info-label">Order Reference:</div>
-                <div class="info-value">${invoice.order_id.substring(0, 8)}</div>
-              </div>
-              ` : ''}
-            </div>
-          </div>
-          
-          <!-- Items Table -->
           <div class="section">
-            <div class="section-title">Invoice Items</div>
-            <table>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
               <thead>
-                <tr>
-                  <th style="width: 5%;">#</th>
-                  <th style="width: 45%;">Description</th>
-                  <th style="width: 10%;" class="text-center">Qty</th>
-                  <th style="width: 20%;" class="text-right">Unit Price</th>
-                  <th style="width: 20%;" class="text-right">Amount</th>
+                <tr style="background-color: #F3F4F6;">
+                  <th style="padding: 12px 8px; text-align: left;">#</th>
+                  <th style="padding: 12px 8px; text-align: left;">Description</th>
+                  <th style="padding: 12px 8px; text-align: center;">Quantity</th>
+                  <th style="padding: 12px 8px; text-align: right;">Unit Price</th>
+                  <th style="padding: 12px 8px; text-align: right;">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -345,128 +258,80 @@ export default function InvoiceDetailsScreen() {
             </table>
           </div>
           
-          <!-- Summary -->
-          <div class="summary">
-            <div class="summary-row">
-              <div>Subtotal</div>
-              <div>₹${invoice.subtotal?.toLocaleString() || '0.00'}</div>
+          <div style="margin-top: 30px; text-align: right;">
+            <div style="font-size: 18px; font-weight: bold;">
+              Total Amount: ₹${invoice.total_amount.toLocaleString()}
             </div>
-            ${invoice.tax_amount && invoice.tax_amount > 0 ? `
-            <div class="summary-row">
-              <div>Tax (${invoice.tax_rate || 0}%)</div>
-              <div>₹${invoice.tax_amount.toLocaleString()}</div>
-            </div>
-            ` : ''}
-            <div class="summary-row">
-              <div>Discount</div>
-              <div>₹${invoice.discount_amount?.toLocaleString() || '0.00'}</div>
-            </div>
-            <div class="summary-row total">
-              <div>Total</div>
-              <div>₹${invoice.total_amount?.toLocaleString() || '0.00'}</div>
-            </div>
-          </div>
-          
-          <!-- Notes -->
-          ${invoice.notes ? `
-          <div class="notes">
-            <div class="notes-title">Notes:</div>
-            <div>${invoice.notes}</div>
-          </div>
-          ` : ''}
-          
-          <!-- Footer -->
-          <div class="footer">
-            <p>Thank you for your business!</p>
-            ${companyData?.name ? `<p>${companyData.name} &copy; ${new Date().getFullYear()}</p>` : ''}
-            <p>This is a computer-generated invoice and does not require a signature.</p>
           </div>
         </div>
       </body>
       </html>
     `;
-  };
+  }, [invoice, companyData]);
 
   // Generate and save PDF
-  const generatePdf = async (action: PdfAction = 'download'): Promise<string | null> => {
+  const generatePdf = async (action: PdfAction = 'download') => {
     try {
       setPdfStatus('generating');
       setPdfAction(action);
-      setPdfGenerationProgress('Preparing invoice data...');
       
-      if (!invoice) {
-        throw new Error('No invoice data available');
-      }
-      
-      // Check permissions first
-      setPdfGenerationProgress('Checking permissions...');
+      // Check permissions
       const hasPermission = await canGeneratePdf();
-      
       if (!hasPermission) {
-        throw new Error('Storage permission denied');
+        throw new Error('Permission denied to generate PDF');
       }
       
-      // Ensure PDF directory exists
-      const pdfDir = await ensureDocumentDirectoryExists();
-      if (!pdfDir) {
-        throw new Error('Could not access storage directory');
-      }
-      
-      // Wait for company data if loading
-      if (companyLoading) {
-        setPdfGenerationProgress('Loading company information...');
-        // Wait a bit for company data
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      // Generate HTML content
-      setPdfGenerationProgress('Generating PDF content...');
-      const htmlContent = generatePdfHtml();
-      
-      // Set the HTML for preview
-      setPdfPreviewHtml(htmlContent);
-      
-      setPdfGenerationProgress('Creating PDF document...');
+      // Ensure directory exists
+      await ensureDocumentDirectoryExists();
       
       // Generate PDF
-      const fileName = `Invoice_${invoice.invoice_number}_${new Date().getTime()}`;
+      const fileName = `invoice_${invoice?.invoice_number}_${Date.now()}.pdf`;
+      const htmlContent = generatePdfHtml;
       const options = {
         html: htmlContent,
-        fileName: fileName,
-        directory: 'Documents',
-        height: 842, // A4 height in points
-        width: 595,  // A4 width in points
+        fileName,
+        directory: Platform.select({
+          ios: 'Documents',
+          android: `${FileSystem.documentDirectory}`
+        }),
+        base64: false
       };
-      
-      const pdf = await RNHTMLtoPDF.convert(options);
-      
-      if (!pdf || !pdf.filePath) {
+
+      const file = await RNHTMLtoPDF.convert(options);
+      if (!file?.filePath) {
         throw new Error('Failed to generate PDF');
       }
       
-      console.log('PDF generated at:', pdf.filePath);
-      setPdfPath(pdf.filePath);
-      setPdfGenerationProgress('PDF generated successfully!');
-      
-      // If we're just previewing, show the preview
-      if (action === 'download' || action === 'send') {
-        setPdfStatus('preview');
-        return pdf.filePath;
-      } else if (action === 'print') {
-        // For printing, go straight to print
-        await handlePrintPdf(pdf.filePath);
-        return pdf.filePath;
+      setPdfPath(file.filePath);
+      setPdfStatus('success');
+
+      // Handle different actions
+      switch (action) {
+        case 'download':
+          await Sharing.shareAsync(file.filePath, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Invoice ${invoice?.invoice_number}`
+          });
+          break;
+        case 'print':
+          await RNPrint.print({ filePath: file.filePath });
+          break;
+        case 'send':
+          setPdfPreviewHtml(generatePdfHtml);
+          break;
       }
-      
-      return pdf.filePath;
-    } catch (err) {
-      console.error('Error generating PDF:', err);
+    } catch (error) {
+      console.error('PDF generation error:', error);
       setPdfStatus('error');
       Alert.alert(
-        'PDF Generation Error',
-        'There was an error generating the PDF. Please try again.'
+        'Error',
+        error instanceof Error ? error.message : 'Failed to generate PDF'
       );
-      return null;
+    } finally {
+      // Cleanup temporary files
+      if (pdfPath && action !== 'preview') {
+        await cleanupTempFiles();
+      }
     }
   };
 
@@ -670,6 +535,7 @@ export default function InvoiceDetailsScreen() {
     : invoice.items || [];
 
   return (
+    // @ts-ignore - PageTransition correctly receives children via its child elements
     <PageTransition type="slide">
       <SafeAreaView className="flex-1 bg-gray-100">
         <Header
@@ -790,6 +656,7 @@ export default function InvoiceDetailsScreen() {
             {invoiceItems.length > 0 ? (
               invoiceItems.map((item: any, index: number) => (
                 <View
+                  // @ts-ignore - key is valid for React components
                   key={item.id || index}
                   className="flex-row justify-between items-center p-3 mb-2 bg-gray-50 rounded-lg"
                 >
@@ -946,3 +813,5 @@ export default function InvoiceDetailsScreen() {
     </PageTransition>
   );
 }
+
+export default InvoiceDetailsScreen;

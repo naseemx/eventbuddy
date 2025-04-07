@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": "16.1.0",
+    "version": "16.2.1",
     "appVersionSource": "remote"
   },
   "build": {
@@ -25,7 +25,8 @@
         "npm_config_legacy_peer_deps": "true",
         "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "EAS_LOCAL_BUILD_ARTIFACTS_DIR": "./build-output"
-      }
+      },
+      "channel": "local"
     },
     "android-test": {
       "distribution": "internal",
@@ -35,13 +36,16 @@
       },
       "cache": {
         "key": "gradle-76",
-        "paths": [".gradle/caches"]
+        "paths": [
+          ".gradle/caches"
+        ]
       },
       "env": {
         "EXPO_USE_FRAMEWORK_LIBS": "false",
         "npm_config_legacy_peer_deps": "true",
         "EAS_SKIP_AUTO_FINGERPRINT": "1"
-      }
+      },
+      "channel": "android-test"
     },
     "preview": {
       "distribution": "internal",

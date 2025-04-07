@@ -106,3 +106,13 @@ export interface Invoice {
   // For backward compatibility with existing code
   amount?: number;
 }
+
+export interface InvoiceItem {
+  id?: string;
+  description?: string;
+  name?: string;
+  quantity: number;
+  unit_price?: number;
+  unitPrice?: number;
+  total?: number;
+}

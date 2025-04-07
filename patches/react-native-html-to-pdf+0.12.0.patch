@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-html-to-pdf/android/build.gradle b/node_modules/react-native-html-to-pdf/android/build.gradle
-index 996ad11..f89d778 100644
+index 996ad11..88aebf0 100644
 --- a/node_modules/react-native-html-to-pdf/android/build.gradle
 +++ b/node_modules/react-native-html-to-pdf/android/build.gradle
 @@ -1,4 +1,3 @@
@@ -16,8 +16,8 @@ index 996ad11..f89d778 100644
       compileOptions {
 -        sourceCompatibility JavaVersion.VERSION_1_8
 -        targetCompatibility JavaVersion.VERSION_1_8
-+        sourceCompatibility JavaVersion.VERSION_11
-+        targetCompatibility JavaVersion.VERSION_11
++        sourceCompatibility JavaVersion.VERSION_17
++        targetCompatibility JavaVersion.VERSION_17
      }
  
      defaultConfig {

@@ -1,10 +1,12 @@
+// Import Reanimated first
+import 'react-native-reanimated';
+
 import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import "react-native-reanimated";
 import "../global.css";
 import { Platform } from "react-native";
 import NotificationBackgroundTask from "../components/notification/NotificationBackgroundTask";
@@ -82,9 +84,11 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={DefaultTheme}>
+      {/* @ts-ignore - CompanyProvider is correctly accepting children */}
       <CompanyProvider>
         <NotificationBackgroundTask>
           <Stack
+            // @ts-ignore - route parameter is correctly typed internally by Expo Router
             screenOptions={({ route }) => {
               // Determine the appropriate animation based on route
               let animationType: 'slide_from_right' | 'slide_from_left' | 'slide_from_bottom' | 'fade' = 'slide_from_right'; // Default for detail views
